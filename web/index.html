@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Year Progress • Studio Control Center</title>
+
+  <!-- ===================================================================== -->
+  <!-- LOCAL FONTS (bundled in assets/fonts — no network required)           -->
+  <!-- ===================================================================== -->
+  <style>
+    @font-face {
+      font-family: 'Inter';
+      src: url('../assets/fonts/Inter-Variable.ttf') format('truetype');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Outfit';
+      src: url('../assets/fonts/Outfit-Variable.ttf') format('truetype');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* =================================================================== -->
+    /* DESIGN TOKENS — deep neutral dark + single indigo accent            */
+    /* =================================================================== */
+    :root {
+      --bg: #0A0B0F;
+      --bar: #0C0E13;
+      --panel: #10131A;
+      --panel-2: #0D1016;
+      --well: #151922;
+      --control: #1B202B;
+      --control-hover: #232936;
+
+      --border: rgba(255, 255, 255, 0.06);
+      --border-2: rgba(255, 255, 255, 0.10);
+
+      --text: #EDEFF5;
+      --text-2: #A2A9B8;
+      --text-3: #6B7284;
+
+      --accent: #5E6AD2;
+      --accent-hover: #6E79E0;
+      --accent-2: #8B94F0;
+      --accent-soft: rgba(94, 106, 210, 0.16);
+      --accent-ring: rgba(94, 106, 210, 0.45);
+      --on-accent: #FFFFFF;
+
+      --radius: 14px;
+      --radius-sm: 9px;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.22);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      user-select: none;
+    }
+    input, textarea, select { user-select: text; }
+
+    /* Every form control renders in the same UI typeface as the rest of the app */
+    button, input, select, textarea {
+      font-family: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .mono {
+      font-family: 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .hidden { display: none !important; }
+    .opacity-0 { opacity: 0; }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 10px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.10);
+      border-radius: 99px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); background-clip: padding-box; }
+
+    :focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+
+    /* =================================================================== */
+    /* APP SHELL                                                           */
+    /* =================================================================== */
+    .app { height: 100%; display: flex; flex-direction: column; }
+
+    /* ---- Top bar ---- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 11px 18px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+    .logo {
+      width: 32px; height: 32px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 12.5px;
+      letter-spacing: 0.02em;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 10px rgba(94, 106, 210, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+      flex-shrink: 0;
+    }
+    .brand-text { min-width: 0; }
+    .brand-row { display: flex; align-items: center; gap: 8px; }
+    .wordmark {
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .chip {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-2);
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      padding: 2.5px 7px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .subtitle { font-size: 11px; color: var(--text-3); margin-top: 1px; white-space: nowrap; }
+
+    /* ---- Center metrics ---- */
+    .metrics {
+      display: flex;
+      align-items: stretch;
+      background: var(--well);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 5px 2px;
+      flex: 0 0 auto;
+    }
+    .metric { text-align: center; padding: 2px 16px; min-width: 96px; }
+    .metric + .metric { border-left: 1px solid var(--border); }
+    .metric b {
+      display: block;
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .metric span {
+      display: block;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-top: 3px;
+    }
+
+    /* ---- Actions ---- */
+    .actions { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 32px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease, opacity 0.15s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.55; cursor: default; transform: none; }
+    .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .btn.primary {
+      background: var(--accent);
+      color: var(--on-accent);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    }
+    .btn.primary:hover { background: var(--accent-hover); }
+
+    .btn.ghost {
+      background: var(--control);
+      border-color: var(--border-2);
+      color: var(--text-2);
+    }
+    .btn.ghost:hover { background: var(--control-hover); color: var(--text); }
+
+    .btn.sm { height: 27px; padding: 0 11px; font-size: 12px; border-radius: 8px; }
+    .btn.block { width: 100%; height: 34px; }
+    .btn.link {
+      background: none; border: none; height: auto; padding: 3px 7px;
+      font-size: 11.5px; font-weight: 500; color: var(--text-3);
+    }
+    .btn.link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+
+    /* ---- Year progress hairline ---- */
+    .yearline { height: 3px; background: rgba(255, 255, 255, 0.05); flex-shrink: 0; overflow: hidden; }
+    .yearline-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 14px rgba(94, 106, 210, 0.55);
+      transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* =================================================================== */
+    /* WORKSPACE                                                           */
+    /* =================================================================== */
+    .workspace { flex: 1; display: flex; gap: 14px; padding: 14px; min-height: 0; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .card-head {
+      height: 46px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .card-title {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-2);
+    }
+    .res-chip {
+      font-size: 10.5px;
+      color: var(--text-3);
+      background: var(--control);
+      border: 1px solid var(--border);
+      padding: 2.5px 8px;
+      border-radius: 6px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
+    }
+
+    /* ---- Stage (left) ---- */
+    .stage { flex: 1; min-width: 0; }
+    .stage-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      min-height: 0;
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(94, 106, 210, 0.07), transparent 65%),
+        var(--panel-2);
+    }
+    .artboard {
+      position: relative;
+      width: 100%;
+      max-width: 780px;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      overflow: hidden;
+      background-color: #05060A;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      background-size: 20px 20px;
+      border: 1px solid var(--border-2);
+      box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .artboard img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+      transition: opacity 0.25s ease;
+    }
+    #preview-loading {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      background: rgba(5, 6, 10, 0.55);
+      backdrop-filter: blur(3px);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+      letter-spacing: 0.01em;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.14);
+      border-top-color: var(--accent-2);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Theme strip */
+    .stage-foot {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+      flex-shrink: 0;
+      min-height: 0;
+    }
+    .foot-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-3);
+      flex-shrink: 0;
+      padding-left: 2px;
+    }
+    .pulse {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2.2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(94, 106, 210, 0.5); }
+      50% { box-shadow: 0 0 0 5px rgba(94, 106, 210, 0); }
+    }
+    .pills { flex: 1; display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; min-width: 0; }
+    .pills::-webkit-scrollbar { height: 5px; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 7px;
+      height: 27px; padding: 0 12px;
+      border-radius: 999px;
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      color: var(--text-2);
+      font: 500 12px/1 'Inter', sans-serif;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 0 0 auto;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+    }
+    .pill:hover { background: var(--control-hover); color: var(--text); }
+    .pill:active { transform: scale(0.97); }
+    .pill .sw { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+    .pill.is-active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: #EDEFFF;
+      box-shadow: 0 0 0 1px rgba(94, 106, 210, 0.35);
+    }
+
+    /* Legend */
+    .legend {
+      height: 34px;
+      display: flex; align-items: center; justify-content: center; gap: 22px;
+      border-top: 1px solid var(--border);
+      background: var(--bar);
+      font-size: 11px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+    .legend span { display: inline-flex; align-items: center; }
+    .legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+    .legend i.ring { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent-2); width: 9px; height: 9px; }
+    .legend i.solid { background: #D8DCE6; }
+    .legend i.muted { background: var(--text-3); width: 5px; height: 5px; }
+
+    /* ---- Inspector (right) ---- */
+    .inspector { width: 480px; flex: 0 0 480px; }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      flex-shrink: 0;
+    }
+    .tab-btn, .qmode-btn {
+      height: 32px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-2);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .tab-btn:hover, .qmode-btn:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); }
+    .tab-btn.is-active, .qmode-btn.is-active {
+      background: var(--accent-soft);
+      border-color: rgba(94, 106, 210, 0.35);
+      color: #E4E7FA;
+    }
+
+    .tab-content { flex: 1; overflow-y: auto; padding: 18px; min-height: 0; }
+    .tab-pane { display: flex; flex-direction: column; gap: 20px; }
+    .tab-pane.hidden { display: none !important; }
+
+    .section { display: flex; flex-direction: column; gap: 9px; }
+    .section-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    /* Grouped well */
+    .well {
+      background: var(--well);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .well.tight { padding: 4px 14px; }
+
+    /* ---- Form controls ---- */
+    .field {
+      width: 100%;
+      height: 36px;
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+      padding: 0 12px;
+      transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .field:hover { background: var(--control-hover); }
+    .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.5; font-size: 12.5px; }
+
+    select.field {
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      padding-right: 34px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7284' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 11px center;
+      background-size: 14px 14px;
+    }
+    select.field option { background: #141821; color: var(--text); }
+
+    /* Segmented control (quote modes) */
+    .seg {
+      display: grid;
+      gap: 5px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 5px;
+    }
+    .seg-3 { grid-template-columns: repeat(3, 1fr); }
+    .seg .qmode-btn { height: 30px; font-size: 12.5px; }
+
+    /* Layout option cards */
+    .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .layout-btn {
+      display: flex; flex-direction: column; gap: 3px;
+      text-align: left;
+      padding: 11px 12px;
+      background: var(--control);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    }
+    .layout-btn:hover { background: var(--control-hover); border-color: var(--border-2); }
+    .layout-btn b { font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .layout-btn span { font-size: 11px; color: var(--text-3); }
+    .layout-btn.is-active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 1px rgba(94, 106, 210, 0.35);
+    }
+    .layout-btn.is-active span { color: #9BA4E8; }
+
+    /* Row with value chip */
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .row-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .row-desc { font-size: 11.5px; color: var(--text-3); margin-top: 2px; line-height: 1.4; }
+    .value-chip {
+      font-family: 'Cascadia Mono', 'Consolas', monospace;
+      font-size: 11.5px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      padding: 3px 9px;
+      border-radius: 7px;
+      flex-shrink: 0;
+    }
+
+    /* Slider */
+    .slider-row { display: flex; align-items: center; gap: 11px; }
+    .slider-row .bound { font-size: 10.5px; color: var(--text-3); font-family: 'Cascadia Mono', Consolas, monospace; flex-shrink: 0; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 6px;
+      border-radius: 99px;
+      background: linear-gradient(to right, var(--accent) var(--fill, 33%), var(--control-hover) var(--fill, 33%));
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(94, 106, 210, 0.22), 0 2px 6px rgba(0, 0, 0, 0.5);
+      transition: transform 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.12); }
+    input[type="range"]:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 4px; }
+
+    /* Switches */
+    .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; cursor: pointer; }
+    .switch-row + .switch-row { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+    .switch {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 38px; height: 22px;
+      border-radius: 99px;
+      background: var(--control-hover);
+      border: 1px solid var(--border-2);
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.18s ease, border-color 0.18s ease;
+    }
+    .switch::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #C3C8D4;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease;
+    }
+    .switch:checked { background: var(--accent); border-color: var(--accent); }
+    .switch:checked::after { transform: translateX(16px); background: #FFFFFF; }
+
+    /* Theme cards */
+    .themes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .theme-card {
+      position: relative;
+      display: flex; flex-direction: column; gap: 9px;
+      text-align: left;
+      padding: 12px;
+      background: var(--control);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    .theme-card:hover { background: var(--control-hover); border-color: var(--border-2); transform: translateY(-1px); }
+    .theme-card.is-active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 1px rgba(94, 106, 210, 0.35);
+    }
+    .theme-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .dots { display: flex; gap: 5px; }
+    .dots i {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      display: block;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    }
+    .badge-active {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.09em;
+      color: #fff;
+      background: var(--accent);
+      padding: 3px 6.5px;
+      border-radius: 5px;
+      line-height: 1;
+    }
+    .theme-name { font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .theme-meta {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 10.5px; color: var(--text-3);
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      text-transform: uppercase;
+    }
+    .keychip {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.07em;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 5px;
+      color: var(--text-3);
+    }
+
+    /* Countdown targets */
+    .cd-list { display: flex; flex-direction: column; gap: 8px; }
+    .cd-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 11px 13px;
+      background: var(--control);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cd-row:hover { background: var(--control-hover); border-color: var(--border-2); }
+    .cd-row.is-active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 1px rgba(94, 106, 210, 0.35);
+    }
+    .cd-info { min-width: 0; }
+    .cd-label {
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      letter-spacing: -0.01em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cd-sub { font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+    .cd-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .cd-days {
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      font-size: 11px; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      background: var(--control-hover);
+      border: 1px solid var(--border-2);
+      padding: 3px 8px;
+      border-radius: 7px;
+      text-transform: lowercase;
+      min-width: 40px;
+      text-align: center;
+    }
+    .cd-row.is-active .cd-days { background: rgba(0, 0, 0, 0.25); }
+    .cd-days.today { background: var(--accent); border-color: var(--accent); color: #fff; text-transform: uppercase; }
+    .cd-days.passed { color: var(--text-3); opacity: 0.75; }
+    .cd-del {
+      width: 25px; height: 25px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-3);
+      font-size: 16px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .cd-del:hover { background: rgba(248, 113, 113, 0.12); color: #F87171; border-color: rgba(248, 113, 113, 0.3); }
+    .cd-empty {
+      font-size: 12px; color: var(--text-3);
+      padding: 16px; text-align: center;
+      background: var(--panel-2);
+      border: 1px dashed var(--border-2);
+      border-radius: 11px;
+    }
+    .cd-add { display: flex; gap: 8px; }
+    .cd-add .field { flex: 1; min-width: 0; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.65);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+
+    /* Color rows */
+    .color-list { display: flex; flex-direction: column; }
+    .color-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 11px 0;
+    }
+    .color-row + .color-row { border-top: 1px solid var(--border); }
+    .color-row .label { font-size: 12.5px; font-weight: 500; color: var(--text); }
+    .color-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    input[type="color"] {
+      width: 32px; height: 27px;
+      padding: 0;
+      border: 1px solid var(--border-2);
+      border-radius: 7px;
+      background: transparent;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 2.5px; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4.5px; }
+    .hex {
+      width: 88px; height: 27px;
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      border-radius: 7px;
+      color: var(--text);
+      font: 500 11.5px/1 'Cascadia Mono', Consolas, monospace;
+      text-align: center;
+      text-transform: uppercase;
+      padding: 0 6px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .hex:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    /* Countdown line */
+    .countdown {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .countdown b {
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .cdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+    .note { font-size: 10.5px; color: var(--text-3); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); line-height: 1.45; }
+    .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+
+    /* =================================================================== */
+    /* STATUS FOOTER                                                       */
+    /* =================================================================== */
+    .statusbar {
+      height: 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 18px;
+      background: var(--bar);
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+    .status-left { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    #footer-status { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #footer-clock { font-family: 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- ===================================================================== -->
+  <!-- 1. TOP BAR                                                            -->
+  <!-- ===================================================================== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">YP</div>
+      <div class="brand-text">
+        <div class="brand-row">
+          <span class="wordmark">Year Progress</span>
+          <span class="chip" id="year-chip">2026 Studio</span>
+        </div>
+        <div class="subtitle">Desktop wallpaper &amp; daily tracker</div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <b id="stat-doy">-- / ---</b>
+        <span>Day of Year</span>
+      </div>
+      <div class="metric">
+        <b id="stat-pct">--.-%</b>
+        <span>Year Passed</span>
+      </div>
+      <div class="metric">
+        <b id="stat-left">---</b>
+        <span>Days Left</span>
+      </div>
+      <div class="metric" id="metric-countdown" hidden>
+        <b id="stat-cd">--</b>
+        <span id="stat-cd-label">Countdown</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button onclick="saveSettings()" class="btn ghost">Save Settings</button>
+      <button onclick="minimizeWindow()" class="btn ghost">Minimize</button>
+      <button onclick="applyWallpaper()" id="btn-apply" class="btn primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Apply Wallpaper
+      </button>
+    </div>
+  </header>
+
+  <div class="yearline"><div class="yearline-fill" id="yearline-fill"></div></div>
+
+  <!-- ===================================================================== -->
+  <!-- 2. WORKSPACE                                                          -->
+  <!-- ===================================================================== -->
+  <main class="workspace">
+
+    <!-- LEFT: live preview stage -->
+    <section class="card stage">
+      <div class="card-head">
+        <div class="card-title">
+          Live Preview
+          <span class="res-chip mono" id="display-res">— × — Native</span>
+        </div>
+        <button onclick="refreshPreview(true)" class="btn ghost sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          Refresh
+        </button>
+      </div>
+
+      <div class="stage-body">
+        <div class="artboard">
+          <img id="preview-img" alt="Wallpaper Preview" class="opacity-0" onload="this.classList.remove('opacity-0')">
+          <div id="preview-loading">
+            <span class="spinner"></span>
+            Rendering preview…
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-foot">
+        <div class="foot-label">
+          <span class="pulse"></span>
+          Themes
+        </div>
+        <div id="theme-pills" class="pills"></div>
+      </div>
+
+      <div class="legend">
+        <span><i class="solid"></i>Passed days</span>
+        <span><i class="ring"></i>Today (focus ring)</span>
+        <span><i class="muted"></i>Coming days</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: inspector -->
+    <aside class="card inspector">
+      <nav class="tabs">
+        <button onclick="setTab('layout')" id="tab-btn-layout" class="tab-btn is-active">Layout</button>
+        <button onclick="setTab('colors')" id="tab-btn-colors" class="tab-btn">Colors</button>
+        <button onclick="setTab('countdown')" id="tab-btn-countdown" class="tab-btn">Countdown</button>
+        <button onclick="setTab('quotes')" id="tab-btn-quotes" class="tab-btn">Quotes</button>
+        <button onclick="setTab('system')" id="tab-btn-system" class="tab-btn">System</button>
+      </nav>
+
+      <div class="tab-content">
+
+        <!-- ============================================================= -->
+        <!-- TAB: LAYOUT                                                    -->
+        <!-- ============================================================= -->
+        <div id="tab-layout" class="tab-pane">
+
+          <div class="section">
+            <label class="section-label" for="sel-font">Typography &amp; font face</label>
+            <select id="sel-font" onchange="onSettingChange('font_face', this.value)" class="field">
+              <option value="outfit">Outfit (Modern Geometric)</option>
+              <option value="montserrat">Montserrat (Architectural)</option>
+              <option value="inter">Inter (Ultra-Clean Technical)</option>
+              <option value="cinzel">Cinzel (Stoic Classical)</option>
+              <option value="bahnschrift">Bahnschrift (DIN Engineering)</option>
+            </select>
+          </div>
+
+          <div class="section">
+            <label class="section-label">Grid architecture</label>
+            <div class="layout-grid">
+              <button onclick="onSettingChange('layout', 'ref_10')" data-layout="ref_10" class="layout-btn">
+                <b>Reference (10 Col)</b>
+                <span>Stoic centered pillar</span>
+              </button>
+              <button onclick="onSettingChange('layout', 'balanced_20')" data-layout="balanced_20" class="layout-btn">
+                <b>Balanced (20 Col)</b>
+                <span>Widescreen 16:9 matrix</span>
+              </button>
+              <button onclick="onSettingChange('layout', 'matrix_25')" data-layout="matrix_25" class="layout-btn">
+                <b>Wide Matrix (25 Col)</b>
+                <span>Compact panorama</span>
+              </button>
+              <button onclick="onSettingChange('layout', 'calendar_53')" data-layout="calendar_53" class="layout-btn">
+                <b>Calendar (53 Col)</b>
+                <span>Weekly contribution style</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="well">
+            <div class="row-between">
+              <span class="row-title">Dot grid density &amp; zoom</span>
+              <span id="zoom-val" class="value-chip">100%</span>
+            </div>
+            <div class="slider-row" style="margin-top: 13px;">
+              <span class="bound">50%</span>
+              <input type="range" id="slider-zoom" min="0.5" max="2.0" step="0.05" value="1.0" oninput="onZoomInput(this.value)">
+              <span class="bound">200%</span>
+            </div>
+            <div class="row-between" style="margin-top: 8px;">
+              <span></span>
+              <button onclick="resetZoom()" class="btn link">Reset to 100%</button>
+            </div>
+          </div>
+
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Circular progress ring</span>
+                <span class="row-desc" style="display:block;">Ring with percentage around the grid</span>
+              </span>
+              <input type="checkbox" id="sw-ring" class="switch" onchange="onSettingChange('show_progress_ring', this.checked)">
+            </label>
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Days remaining banner</span>
+                <span class="row-desc" style="display:block;">Show days left on the wallpaper</span>
+              </span>
+              <input type="checkbox" id="sw-days" class="switch" onchange="onSettingChange('show_days_left', this.checked)">
+            </label>
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Highlight today's dot</span>
+                <span class="row-desc" style="display:block;">Accent focus ring on the current day</span>
+              </span>
+              <input type="checkbox" id="sw-today" class="switch" onchange="onSettingChange('highlight_current_day', this.checked)">
+            </label>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB: COLORS                                                    -->
+        <!-- ============================================================= -->
+        <div id="tab-colors" class="tab-pane hidden">
+
+          <div class="section">
+            <label class="section-label">Preset themes</label>
+            <div id="themes-grid" class="themes-grid"></div>
+          </div>
+
+          <div class="section">
+            <label class="section-label">Custom palette</label>
+            <div class="well tight">
+              <div class="color-list">
+                <div class="color-row">
+                  <span class="label">Background</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-bg" onchange="onColorChange('color_bg', this.value)">
+                    <input type="text" id="tx-bg" class="hex" onchange="onColorChange('color_bg', this.value)">
+                  </div>
+                </div>
+                <div class="color-row">
+                  <span class="label">Passed days dots</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-passed" onchange="onColorChange('color_passed', this.value)">
+                    <input type="text" id="tx-passed" class="hex" onchange="onColorChange('color_passed', this.value)">
+                  </div>
+                </div>
+                <div class="color-row">
+                  <span class="label">Today's dot &amp; ring</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-current" onchange="onColorChange('color_current', this.value)">
+                    <input type="text" id="tx-current" class="hex" onchange="onColorChange('color_current', this.value)">
+                  </div>
+                </div>
+                <div class="color-row">
+                  <span class="label">Coming days dots</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-coming" onchange="onColorChange('color_coming', this.value)">
+                    <input type="text" id="tx-coming" class="hex" onchange="onColorChange('color_coming', this.value)">
+                  </div>
+                </div>
+                <div class="color-row">
+                  <span class="label">Primary year &amp; text</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-textPri" onchange="onColorChange('color_text_primary', this.value)">
+                    <input type="text" id="tx-textPri" class="hex" onchange="onColorChange('color_text_primary', this.value)">
+                  </div>
+                </div>
+                <div class="color-row">
+                  <span class="label">Quotes &amp; secondary</span>
+                  <div class="color-controls">
+                    <input type="color" id="cp-textSec" onchange="onColorChange('color_text_secondary', this.value)">
+                    <input type="text" id="tx-textSec" class="hex" onchange="onColorChange('color_text_secondary', this.value)">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB: COUNTDOWN                                                 -->
+        <!-- ============================================================= -->
+        <div id="tab-countdown" class="tab-pane hidden">
+
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Show countdown on wallpaper</span>
+                <span class="row-desc" style="display:block;">Renders "N days until …" beneath the days-left banner</span>
+              </span>
+              <input type="checkbox" id="sw-countdown" class="switch" onchange="onSettingChange('show_countdown', this.checked)">
+            </label>
+          </div>
+
+          <div class="section">
+            <label class="section-label">Countdown targets</label>
+            <div id="countdown-list" class="cd-list"></div>
+          </div>
+
+          <div class="well section">
+            <label class="section-label" for="cnt-label">Add a target</label>
+            <div class="cd-add">
+              <input type="text" id="cnt-label" class="field" maxlength="40" placeholder="Label (e.g. Trip to Japan)" onkeydown="if(event.key==='Enter')addCountdownTarget()">
+              <input type="date" id="cnt-date" class="field">
+            </div>
+            <label class="switch-row">
+              <span>
+                <span class="row-title" style="font-size:12.5px;">Repeat every year</span>
+                <span class="row-desc" style="display:block;">For birthdays &amp; anniversaries — counts to the next occurrence</span>
+              </span>
+              <input type="checkbox" id="cnt-yearly" class="switch">
+            </label>
+            <button onclick="addCountdownTarget()" class="btn ghost block" style="margin-top:2px;">+ Add countdown target</button>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB: QUOTES                                                    -->
+        <!-- ============================================================= -->
+        <div id="tab-quotes" class="tab-pane hidden">
+
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Display motivational quote</span>
+                <span class="row-desc" style="display:block;">Render timeless wisdom on the wallpaper</span>
+              </span>
+              <input type="checkbox" id="sw-quote" class="switch" onchange="onSettingChange('show_quote', this.checked)">
+            </label>
+          </div>
+
+          <div class="section">
+            <label class="section-label">Quote source</label>
+            <div class="seg seg-3">
+              <button onclick="setQuoteMode('preset')" id="qmode-preset" class="qmode-btn is-active">Curated</button>
+              <button onclick="setQuoteMode('custom')" id="qmode-custom" class="qmode-btn">Custom</button>
+              <button onclick="setQuoteMode('daily_random')" id="qmode-daily_random" class="qmode-btn">Daily</button>
+            </div>
+          </div>
+
+          <div id="qpanel-preset" class="well section">
+            <label class="section-label" for="sel-preset-quotes">Curated wisdom</label>
+            <select id="sel-preset-quotes" onchange="onSettingChange('preset_index', parseInt(this.value))" class="field"></select>
+            <button onclick="shuffleRandomQuote()" class="btn ghost block">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;">
+                <path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/>
+              </svg>
+              Shuffle random quote
+            </button>
+          </div>
+
+          <div id="qpanel-custom" class="well section hidden">
+            <div class="section" style="gap:6px;">
+              <label class="section-label" for="txt-custom-quote">Your quote text</label>
+              <textarea id="txt-custom-quote" rows="3" oninput="onCustomQuoteEdit()" class="field" placeholder="Enter quote…"></textarea>
+            </div>
+            <div class="section" style="gap:6px;">
+              <label class="section-label" for="txt-custom-author">Author / attribution</label>
+              <input type="text" id="txt-custom-author" oninput="onCustomQuoteEdit()" class="field" placeholder="e.g. Marcus Aurelius">
+            </div>
+          </div>
+
+          <div id="qpanel-daily_random" class="well hidden">
+            <div class="row-title">Automatic midnight rotation</div>
+            <p class="row-desc" style="margin-top:5px;">
+              A fresh quote from the curated catalog rotates and applies to your desktop automatically every night at 12:00 AM.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB: SYSTEM                                                    -->
+        <!-- ============================================================= -->
+        <div id="tab-system" class="tab-pane hidden">
+
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Daily midnight automation</span>
+                <span class="row-desc" style="display:block;">Automatically update the wallpaper at 12:00 AM</span>
+              </span>
+              <input type="checkbox" id="sw-midnight" class="switch" onchange="onSettingChange('auto_update_midnight', this.checked)">
+            </label>
+            <div id="midnight-countdown" class="countdown">
+              <span class="cdot"></span>
+              Next midnight update in <b>calculating…</b>
+            </div>
+          </div>
+
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title" id="startup-title">Launch with Windows</span>
+                <span class="row-desc" style="display:block;">Starts silently in the system tray on boot</span>
+              </span>
+              <input type="checkbox" id="sw-startup" class="switch" onchange="toggleStartup(this.checked)">
+            </label>
+            <div class="note" id="startup-note">Registered in Windows Registry — HKCU\Software\Microsoft\Windows\CurrentVersion\Run</div>
+          </div>
+
+          <div class="well" id="well-lockscreen">
+            <div class="row-title">Lock screen</div>
+            <p class="row-desc" style="margin-top:4px;">
+              Set the current wallpaper as the Windows lock screen (static picture). Prompts for administrator permission and takes effect after you sign back in.
+            </p>
+            <div class="btn-row">
+              <button onclick="setLockScreen()" class="btn primary" style="height:30px;font-size:12px;">Set as lock screen</button>
+              <button onclick="clearLockScreen()" class="btn ghost" style="height:30px;font-size:12px;">Restore default</button>
+            </div>
+          </div>
+
+          <div class="well">
+            <div class="row-title">Display environment</div>
+            <div id="hw-info" class="row-desc" style="margin-top:5px;">Detecting display resolution…</div>
+          </div>
+
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- 3. STATUS FOOTER                                                      -->
+  <!-- ===================================================================== -->
+  <footer class="statusbar">
+    <div class="status-left">
+      <span class="pulse"></span>
+      <span id="footer-status">Ready • Studio environment connected</span>
+    </div>
+    <div id="footer-clock">Daily sync: midnight</div>
+  </footer>
+
+</div>
+
+<!-- ===================================================================== -->
+<!-- 4. CONTROLLER & BRIDGE LOGIC                                          -->
+<!-- ===================================================================== -->
+<script>
+  let appState = {
+    settings: {},
+    quotes: [],
+    themes: {},
+    fonts: {},
+    stats: {},
+    display: {}
+  };
+
+  let previewDebounce = null;
+  let isAppInitialized = false;
+  let countdownTimer = null;
+
+  async function bootstrapApp() {
+    if (isAppInitialized) return;
+    if (window.pywebview && window.pywebview.api) {
+      isAppInitialized = true;
+      await initApp();
+    }
+  }
+
+  // 1. Listen for pywebviewready event
+  window.addEventListener('pywebviewready', bootstrapApp);
+
+  // 2. Check if pywebview is already attached when script executes
+  if (window.pywebview && window.pywebview.api) {
+    bootstrapApp();
+  } else {
+    // 3. Fast polling detector (50ms interval) to catch API ready state immediately
+    let retries = 0;
+    const checker = setInterval(() => {
+      retries++;
+      if (window.pywebview && window.pywebview.api) {
+        clearInterval(checker);
+        bootstrapApp();
+      } else if (retries >= 30) {
+        clearInterval(checker);
+        if (!isAppInitialized) {
+          console.warn("pywebview not detected after 1.5s, running mockInit");
+          mockInit();
+        }
+      }
+    }, 50);
+  }
+
+  async function initApp() {
+    try {
+      const data = await window.pywebview.api.get_initial_data();
+      appState = data;
+      renderInitialUI();
+    } catch (err) {
+      console.error("Failed to load initial data from Python:", err);
+      setPreviewLoading(false);
+    }
+  }
+
+  function renderInitialUI() {
+    const s = appState.settings || {};
+    const st = appState.stats;
+
+    // Self-heal: if the themes payload is missing/empty, reload the initial
+    // data once instead of rendering an empty theme palette.
+    if (!appState.themes || Object.keys(appState.themes).length === 0) {
+      console.warn("Themes payload missing; reloading initial data...");
+      if (!window.__retriedInit) {
+        window.__retriedInit = true;
+        initApp();
+        return;
+      }
+    }
+
+    try {
+      // Stats
+      if (st) {
+        const doyEl = document.getElementById('stat-doy');
+        if (doyEl) doyEl.innerText = `${st.day_of_year} / ${st.total_days}`;
+        const pctEl = document.getElementById('stat-pct');
+        if (pctEl) pctEl.innerText = `${st.pct.toFixed(1)}%`;
+        const leftEl = document.getElementById('stat-left');
+        if (leftEl) leftEl.innerText = `${st.days_left}`;
+
+        const yearChip = document.getElementById('year-chip');
+        if (yearChip && st.year) yearChip.innerText = `${st.year} Studio`;
+
+        const yearLine = document.getElementById('yearline-fill');
+        if (yearLine) yearLine.style.width = `${st.pct}%`;
+      }
+
+      // Display Info
+      if (appState.display) {
+        const resText = `${appState.display.width} × ${appState.display.height} Native`;
+        const resEl = document.getElementById('display-res');
+        if (resEl) resEl.innerText = resText;
+        const hwEl = document.getElementById('hw-info');
+        if (hwEl) hwEl.innerText = `Primary monitor: ${appState.display.width} × ${appState.display.height} (DPI supersampled)`;
+      }
+
+      const activeThemeKey = s.color_theme || 'noir';
+
+      // Layout Tab
+      const selFont = document.getElementById('sel-font');
+      if (selFont) selFont.value = s.font_face || 'outfit';
+      updateLayoutButtons(s.layout || 'ref_10');
+
+      const zoom = s.grid_zoom || 1.0;
+      const slZoom = document.getElementById('slider-zoom');
+      if (slZoom) {
+        slZoom.value = zoom;
+        setZoomFill(zoom);
+      }
+      const zoomVal = document.getElementById('zoom-val');
+      if (zoomVal) zoomVal.innerText = `${Math.round(zoom * 100)}%`;
+
+      const swRing = document.getElementById('sw-ring');
+      if (swRing) swRing.checked = s.show_progress_ring !== false;
+      const swDays = document.getElementById('sw-days');
+      if (swDays) swDays.checked = s.show_days_left !== false;
+      const swToday = document.getElementById('sw-today');
+      if (swToday) swToday.checked = s.highlight_current_day !== false;
+
+      // Colors Tab & Quick Theme Bar
+      renderThemePills();
+      renderThemesGrid();
+      updateActiveThemeUI(activeThemeKey);
+      updateColorInputs();
+
+      // Quotes Tab
+      const swQuote = document.getElementById('sw-quote');
+      if (swQuote) swQuote.checked = s.show_quote !== false;
+      setQuoteMode(s.quote_mode || 'preset', false);
+      renderQuoteCatalog();
+      const txtQuote = document.getElementById('txt-custom-quote');
+      if (txtQuote) txtQuote.value = s.custom_quote || '';
+      const txtAuthor = document.getElementById('txt-custom-author');
+      if (txtAuthor) txtAuthor.value = s.custom_author || '';
+
+      // Countdown Tab & header metric
+      const swCountdown = document.getElementById('sw-countdown');
+      if (swCountdown) swCountdown.checked = s.show_countdown !== false;
+      renderCountdownList();
+      updateCountdownMetric();
+
+      // System Tab
+      const swMidnight = document.getElementById('sw-midnight');
+      if (swMidnight) swMidnight.checked = s.auto_update_midnight !== false;
+      if (typeof appState.is_startup === 'boolean') {
+        const swStartup = document.getElementById('sw-startup');
+        if (swStartup) swStartup.checked = appState.is_startup;
+      }
+      // Platform-specific wording + Windows-only feature gating
+      const pf = appState.platform || {};
+      if (pf.lockscreen === false) {
+        const lsWell = document.getElementById('well-lockscreen');
+        if (lsWell) lsWell.style.display = 'none';
+      }
+      if (pf.startup_title) {
+        const stTitle = document.getElementById('startup-title');
+        if (stTitle) stTitle.innerText = pf.startup_title;
+      }
+      if (pf.startup_note) {
+        const stNote = document.getElementById('startup-note');
+        if (stNote) stNote.innerText = pf.startup_note;
+      }
+
+      // Preview rendering: cached thumbnail is shown instantly so the panel
+      // never waits on a render; the fresh preview is then regenerated in the
+      // background so the artboard always settles on up-to-date output.
+      if (appState.preview_url) {
+        updatePreviewImage(appState.preview_url);
+      } else {
+        setPreviewLoading(true);
+      }
+      refreshPreview(true);
+
+      // Start Countdown Ticker (single interval, safe across re-renders)
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(tickCountdown, 1000);
+      tickCountdown();
+    } catch (err) {
+      console.error("Error in renderInitialUI:", err);
+      setPreviewLoading(false);
+      if (!window.__retriedInit) {
+        window.__retriedInit = true;
+        console.warn("Retrying initial load after render error...");
+        initApp();
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // TAB MANAGEMENT
+  // -------------------------------------------------------------------------
+  function setTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('is-active'));
+    const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+    if (activeBtn) activeBtn.classList.add('is-active');
+
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+    const activePane = document.getElementById(`tab-${tabName}`);
+    if (activePane) activePane.classList.remove('hidden');
+  }
+
+  // -------------------------------------------------------------------------
+  // SETTINGS & EVENT HANDLERS
+  // -------------------------------------------------------------------------
+  function onSettingChange(key, value) {
+    appState.settings[key] = value;
+    if (key === 'layout') {
+      updateLayoutButtons(value);
+    }
+    if (key === 'show_countdown') {
+      updateCountdownMetric();
+    }
+    schedulePreviewUpdate();
+  }
+
+  function updateLayoutButtons(layout) {
+    document.querySelectorAll('.layout-btn').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.layout === layout);
+    });
+  }
+
+  function setZoomFill(val) {
+    const slider = document.getElementById('slider-zoom');
+    if (!slider) return;
+    const pct = Math.max(0, Math.min(100, ((parseFloat(val) - 0.5) / 1.5) * 100));
+    slider.style.setProperty('--fill', `${pct}%`);
+  }
+
+  function onZoomInput(val) {
+    const num = parseFloat(val);
+    document.getElementById('zoom-val').innerText = `${Math.round(num * 100)}%`;
+    setZoomFill(num);
+    appState.settings.grid_zoom = num;
+    schedulePreviewUpdate();
+  }
+
+  function resetZoom() {
+    document.getElementById('slider-zoom').value = 1.0;
+    document.getElementById('zoom-val').innerText = '100%';
+    setZoomFill(1.0);
+    appState.settings.grid_zoom = 1.0;
+    schedulePreviewUpdate();
+  }
+
+  // -------------------------------------------------------------------------
+  // THEMES
+  // -------------------------------------------------------------------------
+  function renderThemePills() {
+    const container = document.getElementById('theme-pills');
+    container.innerHTML = '';
+    const themes = appState.themes || {};
+    const currentTheme = appState.settings.color_theme || 'noir';
+
+    for (const [key, t] of Object.entries(themes)) {
+      const btn = document.createElement('button');
+      btn.id = `theme-pill-${key}`;
+      btn.className = 'pill' + (key === currentTheme ? ' is-active' : '');
+      btn.innerHTML = `
+        <span class="sw" style="background: ${t.color_passed || t.ui_accent || '#FFFFFF'}"></span>
+        <span>${t.name}</span>
+      `;
+      btn.onclick = () => applyTheme(key);
+      container.appendChild(btn);
+    }
+  }
+
+  function renderThemesGrid() {
+    const container = document.getElementById('themes-grid');
+    container.innerHTML = '';
+    const themes = appState.themes || {};
+    const currentTheme = appState.settings.color_theme || 'noir';
+
+    for (const [key, t] of Object.entries(themes)) {
+      const btn = document.createElement('button');
+      btn.id = `theme-card-${key}`;
+      const isActive = (key === currentTheme);
+      btn.className = 'theme-card' + (isActive ? ' is-active' : '');
+      btn.onclick = () => applyTheme(key);
+      btn.innerHTML = `
+        <div class="theme-card-top">
+          <div class="dots">
+            <i style="background: ${t.color_bg}" title="Background"></i>
+            <i style="background: ${t.color_passed}" title="Passed days"></i>
+            <i style="background: ${t.color_coming}" title="Coming days"></i>
+            <i style="background: ${t.color_current || t.color_passed}" title="Today"></i>
+          </div>
+          ${isActive ? '<span class="badge-active">ACTIVE</span>' : ''}
+        </div>
+        <div class="theme-name">${t.name}</div>
+        <div class="theme-meta">
+          <span>${t.color_passed || ''}</span>
+          <span class="keychip">${key}</span>
+        </div>
+      `;
+      container.appendChild(btn);
+    }
+  }
+
+  function updateActiveThemeUI(activeKey) {
+    const themes = appState.themes || {};
+    for (const key of Object.keys(themes)) {
+      const pill = document.getElementById(`theme-pill-${key}`);
+      const card = document.getElementById(`theme-card-${key}`);
+      const isActive = (key === activeKey);
+
+      if (pill) pill.classList.toggle('is-active', isActive);
+
+      if (card) {
+        card.classList.toggle('is-active', isActive);
+        const top = card.querySelector('.theme-card-top');
+        if (!top) continue;
+        const badge = top.querySelector('.badge-active');
+        if (isActive && !badge) {
+          const span = document.createElement('span');
+          span.className = 'badge-active';
+          span.innerText = 'ACTIVE';
+          top.appendChild(span);
+        } else if (!isActive && badge) {
+          badge.remove();
+        }
+      }
+    }
+  }
+
+  function applyTheme(key) {
+    const t = appState.themes[key];
+    if (!t) return;
+
+    appState.settings.color_theme = key;
+
+    for (const [k, v] of Object.entries(t)) {
+      if (k.startsWith('color_')) {
+        appState.settings[k] = v;
+      }
+    }
+
+    updateActiveThemeUI(key);
+    updateColorInputs();
+    schedulePreviewUpdate();
+  }
+
+  function updateColorInputs() {
+    const s = appState.settings;
+    setCpVal('color_bg', s.color_bg || '#070709', 'cp-bg', 'tx-bg');
+    setCpVal('color_passed', s.color_passed || '#FFFFFF', 'cp-passed', 'tx-passed');
+    setCpVal('color_current', s.color_current || '#FFFFFF', 'cp-current', 'tx-current');
+    setCpVal('color_coming', s.color_coming || '#2D2E38', 'cp-coming', 'tx-coming');
+    setCpVal('color_text_primary', s.color_text_primary || '#FFFFFF', 'cp-textPri', 'tx-textPri');
+    setCpVal('color_text_secondary', s.color_text_secondary || '#9CA3AF', 'cp-textSec', 'tx-textSec');
+  }
+
+  function setCpVal(key, val, cpId, txId) {
+    const cp = document.getElementById(cpId);
+    const tx = document.getElementById(txId);
+    if (cp) cp.value = val;
+    if (tx) tx.value = val.toUpperCase();
+  }
+
+  function onColorChange(key, val) {
+    let cleaned = val.trim();
+    if (!cleaned.startsWith('#')) cleaned = '#' + cleaned;
+    if (cleaned.length === 7) {
+      appState.settings[key] = cleaned.toUpperCase();
+      appState.settings.color_theme = 'custom';
+      updateActiveThemeUI('custom');
+      updateColorInputs();
+      schedulePreviewUpdate();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // QUOTES
+  // -------------------------------------------------------------------------
+  function setQuoteMode(mode, triggerUpdate = true) {
+    appState.settings.quote_mode = mode;
+    document.querySelectorAll('.qmode-btn').forEach(b => b.classList.remove('is-active'));
+    const active = document.getElementById(`qmode-${mode}`);
+    if (active) active.classList.add('is-active');
+
+    document.getElementById('qpanel-preset').classList.toggle('hidden', mode !== 'preset');
+    document.getElementById('qpanel-custom').classList.toggle('hidden', mode !== 'custom');
+    document.getElementById('qpanel-daily_random').classList.toggle('hidden', mode !== 'daily_random');
+
+    if (triggerUpdate) schedulePreviewUpdate();
+  }
+
+  function renderQuoteCatalog() {
+    const sel = document.getElementById('sel-preset-quotes');
+    sel.innerHTML = '';
+    const quotes = appState.quotes || [];
+    quotes.forEach((q, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.innerText = `"${q.text.substring(0, 50)}..." — ${q.author}`;
+      sel.appendChild(opt);
+    });
+    sel.value = appState.settings.preset_index || 0;
+  }
+
+  function shuffleRandomQuote() {
+    const quotes = appState.quotes || [];
+    if (!quotes.length) return;
+    const rIdx = Math.floor(Math.random() * quotes.length);
+    document.getElementById('sel-preset-quotes').value = rIdx;
+    appState.settings.preset_index = rIdx;
+    schedulePreviewUpdate();
+  }
+
+  function onCustomQuoteEdit() {
+    appState.settings.custom_quote = document.getElementById('txt-custom-quote').value;
+    appState.settings.custom_author = document.getElementById('txt-custom-author').value;
+    schedulePreviewUpdate();
+  }
+
+  // -------------------------------------------------------------------------
+  // COUNTDOWN TARGETS
+  // -------------------------------------------------------------------------
+  function daysUntil(dateStr, yearly) {
+    try {
+      const [y, m, d] = String(dateStr).split('-').map(Number);
+      if (!y || !m || !d) return null;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      let target;
+      if (yearly) {
+        target = new Date(now.getFullYear(), m - 1, d);
+        target.setHours(0, 0, 0, 0);
+        if (target < now) target = new Date(now.getFullYear() + 1, m - 1, d);
+      } else {
+        target = new Date(y, m - 1, d);
+        target.setHours(0, 0, 0, 0);
+      }
+      return Math.round((target - now) / 86400000);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function formatDateSub(dateStr, yearly) {
+    try {
+      const [y, m, d] = String(dateStr).split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      const opts = { month: 'short', day: 'numeric' };
+      if (!yearly) opts.year = 'numeric';
+      const s = dt.toLocaleDateString(undefined, opts);
+      return yearly ? `${s} · repeats yearly` : s;
+    } catch (e) {
+      return String(dateStr || '');
+    }
+  }
+
+  function renderCountdownList() {
+    const list = document.getElementById('countdown-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const targets = appState.settings.countdown_targets || [];
+    const activeIdx = appState.settings.countdown_index || 0;
+
+    if (!targets.length) {
+      const empty = document.createElement('div');
+      empty.className = 'cd-empty';
+      empty.innerText = 'No countdown targets yet — add one below.';
+      list.appendChild(empty);
+      return;
+    }
+
+    targets.forEach((t, i) => {
+      const row = document.createElement('div');
+      row.className = 'cd-row' + (i === activeIdx ? ' is-active' : '');
+      row.onclick = () => selectCountdown(i);
+
+      const info = document.createElement('div');
+      info.className = 'cd-info';
+      const lab = document.createElement('div');
+      lab.className = 'cd-label';
+      lab.innerText = (t && t.label) || 'Untitled';
+      const sub = document.createElement('div');
+      sub.className = 'cd-sub';
+      sub.innerText = formatDateSub(t && t.date, t && t.yearly);
+      info.appendChild(lab);
+      info.appendChild(sub);
+
+      const right = document.createElement('div');
+      right.className = 'cd-right';
+      const d = daysUntil(t && t.date, t && t.yearly);
+      const badge = document.createElement('span');
+      badge.className = 'cd-days' + (d === 0 ? ' today' : (d !== null && d < 0 ? ' passed' : ''));
+      badge.innerText = d === null ? '—' : (d < 0 ? 'passed' : (d === 0 ? 'today' : `${d}d`));
+      const del = document.createElement('button');
+      del.className = 'cd-del';
+      del.innerText = '×';
+      del.title = 'Remove target';
+      del.onclick = (e) => { e.stopPropagation(); deleteCountdown(i); };
+      right.appendChild(badge);
+      right.appendChild(del);
+
+      row.appendChild(info);
+      row.appendChild(right);
+      list.appendChild(row);
+    });
+  }
+
+  function updateCountdownMetric() {
+    const el = document.getElementById('metric-countdown');
+    if (!el) return;
+    const s = appState.settings;
+    const targets = s.countdown_targets || [];
+    const idx = s.countdown_index || 0;
+    const visible = s.show_countdown !== false && targets.length > 0 && idx >= 0 && idx < targets.length;
+    if (!visible) { el.hidden = true; return; }
+
+    const t = targets[idx];
+    const d = daysUntil(t.date, t.yearly);
+    if (d === null || d < 0) { el.hidden = true; return; }
+
+    el.hidden = false;
+    document.getElementById('stat-cd').innerText = d === 0 ? 'TODAY' : String(d);
+    let label = String(t.label || 'Countdown');
+    if (label.length > 15) label = label.slice(0, 15).trim() + '…';
+    document.getElementById('stat-cd-label').innerText = `Until ${label}`;
+  }
+
+  function selectCountdown(i) {
+    appState.settings.countdown_index = i;
+    renderCountdownList();
+    updateCountdownMetric();
+    schedulePreviewUpdate();
+  }
+
+  function addCountdownTarget() {
+    const labelEl = document.getElementById('cnt-label');
+    const dateEl = document.getElementById('cnt-date');
+    const yearlyEl = document.getElementById('cnt-yearly');
+    const label = labelEl.value.trim();
+    const date = dateEl.value;
+    if (!label || !date) {
+      setStatus('Enter a label and a date for the countdown target.');
+      return;
+    }
+    const targets = appState.settings.countdown_targets || [];
+    if (targets.length >= 8) {
+      setStatus('Maximum of 8 countdown targets reached.');
+      return;
+    }
+    targets.push({ label, date, yearly: !!yearlyEl.checked });
+    appState.settings.countdown_targets = targets;
+    appState.settings.countdown_index = targets.length - 1;
+    appState.settings.show_countdown = true;
+    const sw = document.getElementById('sw-countdown');
+    if (sw) sw.checked = true;
+
+    labelEl.value = '';
+    dateEl.value = '';
+    yearlyEl.checked = false;
+
+    renderCountdownList();
+    updateCountdownMetric();
+    setStatus(`Countdown target "${label}" added.`);
+    schedulePreviewUpdate();
+  }
+
+  function deleteCountdown(i) {
+    const targets = appState.settings.countdown_targets || [];
+    if (i < 0 || i >= targets.length) return;
+    const removed = targets[i];
+    targets.splice(i, 1);
+    let idx = appState.settings.countdown_index || 0;
+    if (i < idx) idx--;
+    idx = Math.max(0, Math.min(idx, targets.length - 1));
+    appState.settings.countdown_index = idx;
+    appState.settings.countdown_targets = targets;
+
+    renderCountdownList();
+    updateCountdownMetric();
+    setStatus(`Removed countdown target "${(removed && removed.label) || 'Untitled'}".`);
+    schedulePreviewUpdate();
+  }
+
+  // -------------------------------------------------------------------------
+  // PREVIEW LIFECYCLE
+  // -------------------------------------------------------------------------
+  function setPreviewLoading(isLoading) {
+    const loader = document.getElementById('preview-loading');
+    if (!loader) return;
+    if (isLoading) {
+      loader.style.display = 'flex';
+      loader.classList.remove('hidden');
+    } else {
+      loader.style.display = 'none';
+      loader.classList.add('hidden');
+    }
+  }
+
+  function schedulePreviewUpdate() {
+    if (previewDebounce) clearTimeout(previewDebounce);
+    previewDebounce = setTimeout(() => {
+      refreshPreview(false);
+    }, 70);
+  }
+
+  async function refreshPreview(force = false) {
+    setPreviewLoading(true);
+
+    try {
+      if (window.pywebview && window.pywebview.api) {
+        const dataUrl = await window.pywebview.api.update_preview(appState.settings);
+        if (dataUrl) {
+          updatePreviewImage(dataUrl);
+        } else {
+          setPreviewLoading(false);
+        }
+      } else {
+        setPreviewLoading(false);
+      }
+    } catch (e) {
+      console.error("Preview update error:", e);
+      setPreviewLoading(false);
+    }
+  }
+
+  function updatePreviewImage(url) {
+    const img = document.getElementById('preview-img');
+    if (!img) return;
+
+    if (!url) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    img.onload = () => {
+      img.classList.remove('opacity-0');
+      setPreviewLoading(false);
+    };
+
+    img.onerror = () => {
+      setPreviewLoading(false);
+    };
+
+    img.src = url;
+
+    // Safety timeout: base64 data URLs often decode synchronously or don't trigger onload
+    setTimeout(() => {
+      img.classList.remove('opacity-0');
+      setPreviewLoading(false);
+    }, 150);
+  }
+
+  // -------------------------------------------------------------------------
+  // ACTIONS & SYSTEM
+  // -------------------------------------------------------------------------
+  async function saveSettings() {
+    if (!window.pywebview) return;
+    const ok = await window.pywebview.api.save_settings(appState.settings);
+    setStatus(ok ? "Settings saved successfully" : "Failed to save settings");
+  }
+
+  async function applyWallpaper() {
+    if (!window.pywebview) return;
+    const btn = document.getElementById('btn-apply');
+    btn.disabled = true;
+    btn.innerText = "Applying…";
+    setStatus("Generating and setting high-definition wallpaper...");
+
+    try {
+      const res = await window.pywebview.api.apply_wallpaper(appState.settings);
+      setStatus(res.msg);
+    } catch (err) {
+      setStatus(`Error applying wallpaper: ${err}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Apply Wallpaper`;
+    }
+  }
+
+  async function minimizeWindow() {
+    if (!window.pywebview) return;
+    await saveSettings();
+    await window.pywebview.api.minimize_to_tray();
+  }
+
+  async function toggleStartup(enabled) {
+    if (!window.pywebview) return;
+    const res = await window.pywebview.api.set_startup(enabled);
+    setStatus(res.msg);
+  }
+
+  async function setLockScreen() {
+    if (!window.pywebview) return;
+    setStatus("Setting lock screen...");
+    const res = await window.pywebview.api.set_lockscreen();
+    setStatus(res.msg);
+  }
+
+  async function clearLockScreen() {
+    if (!window.pywebview) return;
+    setStatus("Restoring default lock screen...");
+    const res = await window.pywebview.api.clear_lockscreen();
+    setStatus(res.msg);
+  }
+
+  async function tickCountdown() {
+    if (!window.pywebview) return;
+    try {
+      const t = await window.pywebview.api.get_time_until_midnight();
+      const pad = n => String(n).padStart(2, '0');
+      const str = `${pad(t.h)}h ${pad(t.m)}m ${pad(t.s)}s`;
+      document.getElementById('midnight-countdown').innerHTML = `<span class="cdot"></span> Next midnight update in <b>${str}</b>`;
+      document.getElementById('footer-clock').innerText = `Daily sync: ${str}`;
+    } catch (e) {}
+  }
+
+  // Called from the Python side (tray "Update Wallpaper Now" / "Next Quote")
+  // to reload settings + preview into the open control panel.
+  async function refreshFromTray() {
+    if (!window.pywebview) return;
+    try {
+      const data = await window.pywebview.api.get_initial_data();
+      appState = data;
+      renderInitialUI();
+    } catch (e) {
+      console.error("Tray refresh failed:", e);
+    }
+  }
+
+  function setStatus(msg) {
+    document.getElementById('footer-status').innerText = msg;
+  }
+
+  // Standalone mock for quick HTML preview if opened outside pywebview
+  function mockInit() {
+    appState = {
+      settings: { font_face: 'outfit', layout: 'ref_10', grid_zoom: 1.0, show_progress_ring: true, show_days_left: true, highlight_current_day: true, quote_mode: 'preset', preset_index: 0, color_theme: 'noir', show_countdown: true, countdown_index: 0, countdown_targets: [{ label: 'New Year', date: '2027-01-01', yearly: true }, { label: 'Trip to Japan', date: '2026-10-05', yearly: false }] },
+      stats: { day_of_year: 265, total_days: 365, days_left: 100, pct: 72.6, year: 2026 },
+      display: { width: 2560, height: 1440 },
+      themes: {
+        noir: { name: 'Monochrome Noir', color_bg: '#070709', color_passed: '#FFFFFF', color_current: '#FFFFFF', color_coming: '#2D2E38' },
+        emerald: { name: 'Emerald Zen', color_bg: '#06120C', color_passed: '#34D399', color_current: '#A7F3D0', color_coming: '#152B1E' },
+        cyberpunk: { name: 'Cyberpunk Neon', color_bg: '#0A0712', color_passed: '#FEE715', color_current: '#F43F5E', color_coming: '#221633' }
+      },
+      quotes: [{ text: "You have power over your mind - not outside events.", author: "Marcus Aurelius" }]
+    };
+    renderInitialUI();
+  }
+</script>
+</body>
+</html>

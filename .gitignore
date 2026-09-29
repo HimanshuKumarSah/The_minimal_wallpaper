@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# PyInstaller build output
+build/
+dist/
+/YearProgress.exe
+
+# Test, lint and coverage caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime artifacts generated while testing locally
+/wallpaper_current.png
+/preview_thumbnail.png
+
+# Virtual environments
+.venv/
+venv/

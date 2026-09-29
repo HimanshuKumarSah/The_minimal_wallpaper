@@ -1,0 +1,29 @@
+# Ruff configuration for Year Progress Wallpaper.
+#
+# Only rule families that flag genuine defects are enabled. The rest are
+# deliberately left out:
+#
+#   * BLE001 (blind `except Exception`) — tray, scheduler and GUI callbacks run
+#     on background threads; catching broadly at those boundaries is intentional
+#     so a single bad call can never take the whole app down.
+#   * DTZ005 / DTZ011 (`datetime.now()` / `date.today()` without tz) — the app
+#     works in local wall-clock time on purpose (midnight rollover, "days left in
+#     <year>", date-stamped wallpapers), so naive local datetimes are correct.
+#   * S110 / S112 (`try/except/pass|continue`) — best-effort cleanup of registry
+#     handles and temp files where a failure is non-fatal.
+#
+# Run `ruff check .` after editing; a clean run is required.
+
+extend-exclude = [
+    "build",
+    "dist",
+]
+
+[lint]
+select = [
+    "E4",  # pycodestyle errors (imports, indentation)
+    "E7",  # pycodestyle warnings (statements, comparisons)
+    "E9",  # pycodestyle fatal errors (syntax)
+    "F",   # pyflakes (unused/undefined names, bad imports)
+    "I",   # import sorting
+]

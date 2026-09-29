@@ -1,0 +1,5 @@
+customtkinter==6.0.0
+pillow==12.2.0
+pystray==0.19.5
+pywebview==6.2.1
+python-xlib==0.33; sys_platform == "linux"
