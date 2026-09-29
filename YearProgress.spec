@@ -63,10 +63,10 @@ if sys.platform == 'darwin':
         name='YearProgress.app',
         icon=None,
         bundle_identifier='com.yearprogress.wallpaper',
-        version='1.0.0',
+        version='1.1.0',
         info_plist={
             'NSHighResolutionCapable': True,
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleShortVersionString': '1.1.0',
             'NSHumanReadableCopyright': 'Year Progress Wallpaper',
         },
     )

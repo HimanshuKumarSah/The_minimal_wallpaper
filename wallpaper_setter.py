@@ -33,6 +33,34 @@ def set_wallpaper(image_path):
     return _set_wallpaper_windows(image_path)
 
 
+def set_wallpapers(assignments, primary_path):
+    """Applies per-display images: assignments is [(monitor_key, image_path)].
+
+    ``primary_path`` is the app's main wallpaper file — it is used whenever the
+    per-display API is unavailable (single assignment, COM failure) and by the
+    POSIX/Linux backends. Returns (ok, message).
+    """
+    if not assignments:
+        return False, "No wallpaper images to apply."
+    if not IS_WINDOWS:
+        return wallpaper_setter_posix.set_wallpapers(assignments, primary_path)
+    keyed = [(key, path) for key, path in assignments if key]
+    if len(keyed) <= 1:
+        return set_wallpaper(primary_path)
+    try:
+        import win_wallpaper_com
+
+        applied = win_wallpaper_com.set_wallpapers(
+            [(key, os.path.abspath(path)) for key, path in keyed]
+        )
+        if applied:
+            return True, f"Wallpaper updated on {applied} display(s)."
+    except Exception as e:
+        print(f"Note: per-monitor wallpaper API failed ({e}); using single image.")
+    # COM unavailable or every SetWallpaper call failed → one image everywhere.
+    return set_wallpaper(primary_path)
+
+
 def _set_wallpaper_windows(image_path):
     """
     Sets the Windows desktop wallpaper to the specified image file path.
@@ -74,7 +102,20 @@ def _set_wallpaper_windows(image_path):
         except Exception as e:
             print(f"Warning: could not set BackgroundType: {e}")
 
-        # 3. Inform Windows Shell to change the desktop wallpaper immediately
+        # 3. Multi-monitor systems: SystemParametersInfo alone can leave stale
+        #    per-monitor images behind, so push the same file to every display
+        #    through IDesktopWallpaper when more than one monitor is present.
+        #    Single-monitor systems skip straight to the SPI path below.
+        try:
+            import win_wallpaper_com
+
+            monitors = win_wallpaper_com.enumerate_monitors()
+            if monitors and len(monitors) > 1 and win_wallpaper_com.set_all(abs_path):
+                return True, "Wallpaper updated successfully."
+        except Exception as e:
+            print(f"Note: per-monitor wallpaper API unavailable ({e}); using SPI.")
+
+        # 4. Inform Windows Shell to change the desktop wallpaper immediately
         result = ctypes.windll.user32.SystemParametersInfoW(
             SPI_SETDESKWALLPAPER,
             0,

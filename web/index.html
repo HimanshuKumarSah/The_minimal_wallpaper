@@ -1156,6 +1156,31 @@
             <div class="note" id="startup-note">Registered in Windows Registry — HKCU\Software\Microsoft\Windows\CurrentVersion\Run</div>
           </div>
 
+          <div class="well">
+            <label class="switch-row">
+              <span>
+                <span class="row-title">Wallpaper per monitor</span>
+                <span class="row-desc" style="display:block;">Render a correctly-sized image for every connected display (falls back to one image if unavailable)</span>
+              </span>
+              <input type="checkbox" id="sw-multi" class="switch" onchange="onSettingChange('multi_monitor', this.checked)">
+            </label>
+          </div>
+
+          <div class="well">
+            <div class="row-title">Updates</div>
+            <div id="update-status" class="row-desc" style="margin-top:5px;">Version —</div>
+            <label class="switch-row" style="margin-top:8px;">
+              <span>
+                <span class="row-title">Check automatically</span>
+                <span class="row-desc" style="display:block;">Once a day at launch — notifies through the system tray</span>
+              </span>
+              <input type="checkbox" id="sw-checkup" class="switch" onchange="onSettingChange('check_updates', this.checked)">
+            </label>
+            <div class="btn-row" style="margin-top:6px;">
+              <button onclick="checkForUpdates()" class="btn ghost" style="height:30px;font-size:12px;">Check now</button>
+            </div>
+          </div>
+
           <div class="well" id="well-lockscreen">
             <div class="row-title">Lock screen</div>
             <p class="row-desc" style="margin-top:4px;">
@@ -1286,11 +1311,17 @@
 
       // Display Info
       if (appState.display) {
-        const resText = `${appState.display.width} × ${appState.display.height} Native`;
+        const d = appState.display;
+        const resText = `${d.width} × ${d.height} Native`;
         const resEl = document.getElementById('display-res');
         if (resEl) resEl.innerText = resText;
+        const resList = (d.list && d.list.length ? d.list : [`${d.width} × ${d.height}`]).join('  •  ');
         const hwEl = document.getElementById('hw-info');
-        if (hwEl) hwEl.innerText = `Primary monitor: ${appState.display.width} × ${appState.display.height} (DPI supersampled)`;
+        if (hwEl) {
+          hwEl.innerText = (d.count || 1) > 1
+            ? `${d.count} displays: ${resList} (DPI supersampled)`
+            : `Primary monitor: ${resList} (DPI supersampled)`;
+        }
       }
 
       const activeThemeKey = s.color_theme || 'noir';
@@ -1341,6 +1372,11 @@
       // System Tab
       const swMidnight = document.getElementById('sw-midnight');
       if (swMidnight) swMidnight.checked = s.auto_update_midnight !== false;
+      const swMulti = document.getElementById('sw-multi');
+      if (swMulti) swMulti.checked = s.multi_monitor !== false;
+      const swCheckup = document.getElementById('sw-checkup');
+      if (swCheckup) swCheckup.checked = s.check_updates !== false;
+      renderUpdateStatus();
       if (typeof appState.is_startup === 'boolean') {
         const swStartup = document.getElementById('sw-startup');
         if (swStartup) swStartup.checked = appState.is_startup;
@@ -1382,6 +1418,53 @@
         console.warn("Retrying initial load after render error...");
         initApp();
       }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // UPDATE CHECK (System tab)
+  // -------------------------------------------------------------------------
+  function renderUpdateStatus() {
+    const el = document.getElementById('update-status');
+    if (!el) return;
+    const ver = appState.version || 'dev';
+    const up = appState.update;
+    if (up && up.tag) {
+      el.innerHTML = `<b style="color:var(--accent);">Version ${up.tag} available</b> — you have ${ver}. `
+        + `<button class="btn ghost" style="height:22px;font-size:11px;padding:0 10px;margin-left:6px;" onclick="openReleases()">Download</button>`;
+    } else {
+      el.innerText = `Version ${ver} — running the latest release`;
+    }
+  }
+
+  async function checkForUpdates() {
+    const el = document.getElementById('update-status');
+    if (el) el.innerText = 'Checking for updates…';
+    setStatus('Checking for updates…');
+    if (!window.pywebview) return;
+    try {
+      const r = await window.pywebview.api.check_for_updates();
+      if (!r || r.error) {
+        const msg = `Update check failed: ${(r && r.error) || 'unknown error'}`;
+        if (el) el.innerText = msg;
+        setStatus(msg);
+        return;
+      }
+      appState.update = r.newer ? { tag: r.tag, url: r.url } : null;
+      if (r.current) appState.version = r.current;
+      renderUpdateStatus();
+      setStatus(r.newer ? `Version ${r.tag} is available` : 'You are running the latest version');
+    } catch (e) {
+      if (el) el.innerText = `Update check failed: ${e}`;
+    }
+  }
+
+  async function openReleases() {
+    if (!window.pywebview) return;
+    try {
+      await window.pywebview.api.open_releases();
+    } catch (e) {
+      console.error('Could not open releases page:', e);
     }
   }
 

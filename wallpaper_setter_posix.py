@@ -29,6 +29,33 @@ def set_wallpaper(image_path):
     return _set_linux_wallpaper(abs_path)
 
 
+def set_wallpapers(assignments, primary_path):
+    """Applies per-display images: assignments is [(display_key, image_path)].
+
+    macOS: each NSScreen is matched by its CGDirectDisplayID (the same key
+    displays.list_displays() produced) and gets its own image. Linux desktops
+    accept one image for all outputs, so ``primary_path`` is applied instead.
+    """
+    if not _is_macos():
+        return set_wallpaper(primary_path)
+    mapping = {str(key): path for key, path in assignments if key}
+    if not mapping:
+        return set_wallpaper(primary_path)
+
+    def resolve(screen):
+        try:
+            key = str(int(screen.deviceDescription()["NSScreenNumber"]))
+        except Exception:
+            key = None
+        return os.path.abspath(mapping.get(key, primary_path))
+
+    ok, msg = _set_macos_apply(resolve)
+    if ok:
+        return True, "Wallpaper updated successfully."
+    # Partial or failed application → one image on every desktop.
+    return _set_macos_osascript(os.path.abspath(primary_path), msg)
+
+
 def _is_macos():
     return sys.platform == "darwin"
 
@@ -65,6 +92,11 @@ def _set_macos_wallpaper(abs_path):
 
 def _set_macos_appkit(abs_path):
     """Preferred path: NSWorkspace needs no automation permission."""
+    return _set_macos_apply(lambda _screen: abs_path)
+
+
+def _set_macos_apply(path_for_screen):
+    """Applies ``path_for_screen(screen)`` to every connected display."""
     try:
         import AppKit
         from Foundation import NSURL
@@ -72,11 +104,11 @@ def _set_macos_appkit(abs_path):
         return False, f"pyobjc unavailable ({e})"
     try:
         workspace = AppKit.NSWorkspace.sharedWorkspace()
-        url = NSURL.fileURLWithPath_(abs_path)
         screens = AppKit.NSScreen.screens()
         if not screens:
             return False, "no displays found"
         for screen in screens:
+            url = NSURL.fileURLWithPath_(os.path.abspath(path_for_screen(screen)))
             result = workspace.setDesktopImageURL_forScreen_options_error_(
                 url, screen, {}, None
             )

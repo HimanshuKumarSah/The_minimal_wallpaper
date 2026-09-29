@@ -11,6 +11,7 @@ A minimalist, high-definition desktop wallpaper generator and daily tracker for 
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | Generate & apply wallpaper | ✅ Registry + `SystemParametersInfo` | ✅ `NSWorkspace` (pyobjc), `osascript` fallback | ✅ gsettings (GNOME/Cinnamon/MATE), plasma (KDE), xfconf (Xfce), feh/sway fallbacks |
+| Per-monitor wallpaper | ✅ `IDesktopWallpaper` (one render per display) | ✅ per-screen `NSWorkspace` | — (desktops apply one image across all outputs) |
 | Login/startup integration | ✅ HKCU Run key | ✅ Launch Agent | ✅ XDG autostart entry |
 | System tray | ✅ | ✅ | ✅ (AppIndicator/GTK backend required) |
 | Control panel UI | ✅ pywebview (WebView2) + Tk fallback | ✅ pywebview (WKWebView) | ✅ pywebview (WebKitGTK) + Tk fallback |
@@ -63,6 +64,11 @@ pip install python-xlib
 - **Native Resolution & Anti-Aliased Rendering**:
   - Auto-detects physical screen resolution (1080p, 1440p, 4K, Ultrawide).
   - 2× supersampling with Lanczos downsampling ensures crisp typography and smooth circles.
+- **🖥 Multi-Monitor Support**:
+  - Renders one correctly-sized image per connected display (Windows/macOS) and applies them individually through `IDesktopWallpaper` / per-screen `NSWorkspace`.
+  - Falls back to a single image on every display automatically when the per-monitor API is unavailable; toggleable in the System tab (`multi_monitor`).
+- **🔔 Update Checker**:
+  - Checks GitHub Releases once a day at launch and notifies through the system tray when a newer version exists (opt-out via `check_updates`; manual *Check now* button in the System tab).
 - **System Tray Quick Access**:
   - Right-click or click tray icon to update wallpaper immediately, skip to the next quote, open the dashboard, or toggle startup.
 
@@ -131,8 +137,8 @@ ruff check .
 
 - **Data Directory:** see the table in [Platform Support](#-platform-support) (Windows: `%LOCALAPPDATA%\YearProgressWallpaper`, macOS: `~/Library/Application Support/YearProgressWallpaper`, Linux: `$XDG_DATA_HOME/YearProgressWallpaper`).
   - All user data and generated wallpapers are stored here so they persist reliably across reboots (including when running the packaged executable).
-  - `settings.json`: All user preferences (zoom level, custom colors, layout style, quote choice, auto-update toggle, last rendered date).
+  - `settings.json`: All user preferences (zoom level, custom colors, layout style, quote choice, auto-update toggle, multi-monitor toggle, update-check toggle, last rendered date).
   - `quotes.json`: Editable database of motivational quotes (auto-seeded from the bundled catalog on first run; edit this copy to customize).
-  - `wallpaper_YYYY-MM-DD.bmp` / `.png`: Today's generated desktop wallpaper (the `.png` is what gets applied on every OS; older days are cleaned up automatically).
+  - `wallpaper_YYYY-MM-DD.bmp` / `.png`: Today's generated desktop wallpaper (the `.png` is what gets applied on every OS; older days are cleaned up automatically). Multi-monitor runs add `wallpaper_YYYY-MM-DD_dN.*` siblings sized for each secondary display.
   - `preview_thumbnail.png`: The live preview image shown in the control panel.
 - **Bundled resources** (read-only, shipped inside the executable or alongside the source): `web/` (webview UI), `assets/fonts/` (typography), `app_icon.png` / `app_icon.ico`.

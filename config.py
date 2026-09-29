@@ -9,6 +9,10 @@ import paths
 SETTINGS_FILE = os.path.join(paths.data_dir(), "settings.json")
 QUOTES_FILE = os.path.join(paths.data_dir(), "quotes.json")
 
+# Shown in the UI and sent as the User-Agent of update checks; bump with each
+# release (the GitHub tag the updater compares against is "v" + this).
+APP_VERSION = "1.1.0"
+
 # Serializes read-modify-write cycles on settings.json (tray / scheduler / UI
 # threads all touch it), so a stale in-memory dict can't silently clobber a
 # value another thread just stamped.
@@ -383,6 +387,13 @@ DEFAULT_SETTINGS = {
     # Automation
     "auto_update_midnight": True,
     "start_with_windows": False,
+    # Multi-monitor: render one correctly-sized image per display (Windows/macOS;
+    # ignored on Linux where the desktop applies a single image everywhere)
+    "multi_monitor": True,
+    # Update checker: probe GitHub Releases once a day at launch and notify
+    # through the tray when a newer version exists
+    "check_updates": True,
+    "last_update_check": "",
     "last_rendered_date": "",
     "daily_seed": 0
 }

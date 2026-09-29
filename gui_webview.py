@@ -4,13 +4,17 @@ import os
 import random
 import threading
 import time
+import webbrowser
 
 import webview
 
 import config
+import displays
 import paths
 import platform_info
 import startup_manager
+import update_checker
+import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
 from app_tray import AppTray
@@ -37,6 +41,7 @@ class WebviewBridge:
         pct = (day_of_year / total_days) * 100.0
         
         w, h = wallpaper_generator.get_screen_resolution()
+        display_list = displays.list_displays()
 
         # Return the cached preview thumbnail so the control panel hydrates
         # instantly; a fresh render is kicked off asynchronously from the
@@ -58,8 +63,12 @@ class WebviewBridge:
             },
             "display": {
                 "width": w,
-                "height": h
+                "height": h,
+                "count": len(display_list),
+                "list": [f"{d.width} × {d.height}" for d in display_list]
             },
+            "version": config.APP_VERSION,
+            "update": update_checker.cached(),
             "is_startup": startup_manager.is_startup_enabled(),
             "platform": platform_info.as_dict(),
             "preview_url": prev_data_url
@@ -91,7 +100,7 @@ class WebviewBridge:
             # Volatile keys owned by the render/scheduler paths — the web UI
             # only echoes them back, so never let a stale copy overwrite disk.
             disk = config.load_settings()
-            for key in ("last_rendered_date", "daily_seed"):
+            for key in ("last_rendered_date", "daily_seed", "last_update_check"):
                 if key in disk:
                     settings[key] = disk[key]
             ok = config.save_settings(settings)
@@ -104,9 +113,7 @@ class WebviewBridge:
     def apply_wallpaper(self, settings):
         self.save_settings(settings)
         try:
-            wall_path, _ = wallpaper_generator.generate_wallpaper(settings, preview_only=False)
-            set_path = os.path.splitext(wall_path)[0] + ".png"
-            success, msg = wallpaper_setter.set_wallpaper(set_path)
+            success, msg, _png = wallpaper_apply.apply_wallpaper(settings)
             now_str = datetime.datetime.now().strftime("%I:%M:%S %p")
             if success:
                 config.stamp_rendered_date()
@@ -115,6 +122,23 @@ class WebviewBridge:
                 return {"success": False, "msg": f"⚠ {msg}"}
         except Exception as e:
             return {"success": False, "msg": f"⚠ Error: {e}"}
+
+    def check_for_updates(self):
+        """Manual 'Check now' button — always fetches and reports the result."""
+        try:
+            return update_checker.check_now()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def open_releases(self):
+        """Opens the GitHub releases page in the system browser (the webview
+        must never navigate away from the app's local HTML)."""
+        info = update_checker.cached()
+        url = info["url"] if info else (
+            "https://github.com/HimanshuKumarSah/The_minimal_wallpaper/releases"
+        )
+        webbrowser.open(url)
+        return True
 
     def set_startup(self, enabled):
         success, msg = startup_manager.set_startup(enabled)
@@ -167,6 +191,10 @@ class YearProgressWebviewApp:
         )
         self.tray.start()
 
+        # Daily GitHub release check (daemon thread; no-op when disabled or
+        # already checked today; failures never surface to the user)
+        threading.Thread(target=self._check_for_updates, daemon=True).start()
+
         # Build Webview Window
         self._build_window()
 
@@ -212,9 +240,7 @@ class YearProgressWebviewApp:
     def update_wallpaper_now(self, notify=True):
         self.settings = config.load_settings()
         try:
-            wall_path, _ = wallpaper_generator.generate_wallpaper(self.settings, preview_only=False)
-            set_path = os.path.splitext(wall_path)[0] + ".png"
-            success, msg = wallpaper_setter.set_wallpaper(set_path)
+            success, msg, _png = wallpaper_apply.apply_wallpaper(self.settings)
             if success:
                 config.stamp_rendered_date()
                 print(f"[{datetime.datetime.now()}] Wallpaper updated successfully.")
@@ -226,6 +252,18 @@ class YearProgressWebviewApp:
                 print(f"[{datetime.datetime.now()}] Failed to set wallpaper: {msg}")
         except Exception as e:
             print(f"Error during wallpaper update: {e}")
+
+    def _check_for_updates(self):
+        try:
+            info = update_checker.check()
+            if info and self.tray:
+                self.tray.notify(
+                    "Year Progress",
+                    f"Version {info['tag']} is available (you have {config.APP_VERSION}). "
+                    "See GitHub Releases to download it.",
+                )
+        except Exception as e:
+            print(f"Update check error: {e}")
 
     def on_midnight_trigger(self, reason="midnight_daily_update"):
         print(f"[App] Midnight update triggered: {reason}")

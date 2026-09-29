@@ -173,11 +173,22 @@ def _cleanup_old_wallpapers(keep_png):
     if os.path.dirname(os.path.normcase(keep_png)) != os.path.normcase(os.path.abspath(data_dir)):
         return
     keep_stem = os.path.splitext(os.path.normcase(keep_png))[0]
+    # Multi-monitor renders produce wallpaper_<date>_dN variants; they share the
+    # base dated stem, which must keep the whole set (including the primary
+    # wallpaper_*.png) alive across per-display renders of the same day.
+    base_stem = re.sub(r"_d\d+$", "", keep_stem)
     keep = {os.path.normcase(keep_png), keep_stem + ".bmp"}
     patterns = glob.glob(os.path.join(data_dir, "wallpaper_*.png")) + \
                glob.glob(os.path.join(data_dir, "wallpaper_*.bmp"))
     for p in patterns:
-        if os.path.normcase(p) in keep:
+        np = os.path.normcase(p)
+        stem = os.path.splitext(np)[0]
+        suffix = stem[len(base_stem):] if stem.startswith(base_stem) else None
+        same_day = (
+            stem == base_stem
+            or (suffix is not None and suffix.startswith("_d") and suffix[2:].isdigit())
+        )
+        if np in keep or same_day:
             continue
         try:
             os.remove(p)

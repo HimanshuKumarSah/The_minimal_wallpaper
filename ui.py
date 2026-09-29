@@ -12,6 +12,7 @@ import config
 import paths
 import platform_info
 import startup_manager
+import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
 from scheduler import DailyScheduler
@@ -1147,7 +1148,7 @@ class YearProgressUI:
         # seed). The UI only echoes them back, so re-read them first — otherwise
         # a stale copy loaded at startup would silently revert them on disk.
         disk = config.load_settings()
-        for key in ("last_rendered_date", "daily_seed"):
+        for key in ("last_rendered_date", "daily_seed", "last_update_check"):
             if key in disk:
                 self.settings[key] = disk[key]
         if config.save_settings(self.settings):
@@ -1164,16 +1165,14 @@ class YearProgressUI:
     def _apply_wallpaper_worker(self):
         # Runs off the GUI thread; all Tk updates are marshalled via root.after.
         try:
-            wall_path, _ = wallpaper_generator.generate_wallpaper(self.settings)
-            set_path = os.path.splitext(wall_path)[0] + ".png"
-            success, msg = wallpaper_setter.set_wallpaper(set_path)
+            success, msg, png_path = wallpaper_apply.apply_wallpaper(self.settings)
             now_time = datetime.datetime.now().strftime("%I:%M:%S %p")
             if success:
                 config.stamp_rendered_date()
                 self.root.after(0, lambda: self.var_status.set(f"●  Wallpaper applied at {now_time}"))
                 self.root.after(0, self.schedule_preview_update, True)
                 if self.on_wallpaper_updated:
-                    self.root.after(0, lambda: self.on_wallpaper_updated(wall_path))
+                    self.root.after(0, lambda: self.on_wallpaper_updated(png_path))
             else:
                 self.root.after(0, lambda: self.var_status.set(f"●  {msg}"))
                 self.root.after(0, lambda m=msg: messagebox.showerror("Wallpaper Error", m))

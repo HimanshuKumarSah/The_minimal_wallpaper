@@ -1,10 +1,12 @@
 import argparse
 import datetime
-import os
 import random
 import sys
+import threading
 
 import config
+import update_checker
+import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
 from app_tray import AppTray
@@ -59,11 +61,27 @@ class YearProgressApp:
         # Setup Scheduler for midnight daily updates
         self.scheduler = DailyScheduler(self.on_midnight_trigger)
         self.scheduler.start()
+
+        # Daily GitHub release check (daemon thread; no-op when disabled or
+        # already checked today; failures never surface to the user)
+        threading.Thread(target=self._check_for_updates, daemon=True).start()
         
         # Auto-apply wallpaper on initial launch to ensure it's up to date
         # (deferred so the UI appears immediately; runs after mainloop starts)
         if wallpaper_generator.requires_daily_update(self.settings):
             self.root.after(300, lambda: self.update_wallpaper_now(notify=False))
+
+    def _check_for_updates(self):
+        try:
+            info = update_checker.check()
+            if info and self.tray:
+                self.tray.notify(
+                    "Year Progress",
+                    f"Version {info['tag']} is available (you have {config.APP_VERSION}). "
+                    "See GitHub Releases to download it.",
+                )
+        except Exception as e:
+            print(f"Update check error: {e}")
 
     def show_window_from_tray(self):
         self.root.after(0, self.ui.show_window)
@@ -71,9 +89,7 @@ class YearProgressApp:
     def update_wallpaper_now(self, notify=True):
         self.settings = config.load_settings()
         try:
-            wall_path, _ = wallpaper_generator.generate_wallpaper(self.settings)
-            set_path = os.path.splitext(wall_path)[0] + ".png"
-            success, msg = wallpaper_setter.set_wallpaper(set_path)
+            success, msg, _png = wallpaper_apply.apply_wallpaper(self.settings)
             if success:
                 print(f"[{datetime.datetime.now()}] Wallpaper updated successfully.")
                 config.stamp_rendered_date()
@@ -161,9 +177,7 @@ def main():
     
     if args.update_now:
         settings = config.load_settings()
-        wall_path, _ = wallpaper_generator.generate_wallpaper(settings)
-        set_path = os.path.splitext(wall_path)[0] + ".png"
-        success, msg = wallpaper_setter.set_wallpaper(set_path)
+        success, msg, _png = wallpaper_apply.apply_wallpaper(settings)
         print(f"Update now result: {success} ({msg})")
         sys.exit(0 if success else 1)
         
