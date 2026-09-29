@@ -18,14 +18,6 @@ APP_VERSION = "1.1.0"
 # value another thread just stamped.
 _settings_lock = threading.RLock()
 
-FONT_PRESETS = {
-    "outfit": "Outfit (Modern Geometric)",
-    "montserrat": "Montserrat (Architectural)",
-    "inter": "Inter (Ultra-Clean Technical)",
-    "cinzel": "Cinzel (Stoic Classical)",
-    "bahnschrift": "Bahnschrift (DIN Engineering)"
-}
-
 COLOR_THEMES = {
     "noir": {
         "name": "Monochrome Noir",
@@ -361,7 +353,7 @@ def _countdown_seed_date():
 DEFAULT_SETTINGS = {
     "font_face": "outfit",               # "outfit", "montserrat", "inter", "cinzel", "bahnschrift"
     "layout": "ref_10",                  # "ref_10", "balanced_20", "matrix_25", "calendar_53"
-    "grid_zoom": 1.0,                    # 0.5 to 2.2 zoom multiplier
+    "grid_zoom": 1.0,                    # 0.4 to 2.5 zoom multiplier
     "quote_mode": "preset",              # "preset", "custom", "daily_random"
     "preset_index": 0,
     "custom_quote": "You have power over your mind - not outside events. Realize this, and you will find strength.",
@@ -386,7 +378,6 @@ DEFAULT_SETTINGS = {
     "color_text_secondary": "#9CA3AF",
     # Automation
     "auto_update_midnight": True,
-    "start_with_windows": False,
     # Multi-monitor: render one correctly-sized image per display (Windows/macOS;
     # ignored on Linux where the desktop applies a single image everywhere)
     "multi_monitor": True,
@@ -398,8 +389,17 @@ DEFAULT_SETTINGS = {
     "daily_seed": 0
 }
 
+# quotes.json parsed result, keyed by file mtime — every render/preview calls
+# load_quotes() and re-reading the same unchanged file was pure I/O.
+_quotes_cache = {"mtime": None, "data": None}
+
 def load_quotes():
-    """Load the user-editable quotes database, seeding it from the bundled copy if missing."""
+    """Load the user-editable quotes database, seeding it from the bundled copy if missing.
+
+    The parsed result is cached against the file's mtime, so repeated calls
+    within one render/preview cycle don't re-read the JSON. Treat the returned
+    list as read-only (replacing the file invalidates the cache naturally).
+    """
     bundles = [
         os.path.join(paths.resource_dir(), "quotes.json"),
         os.path.join(paths.app_dir(), "quotes.json"),
@@ -415,9 +415,14 @@ def load_quotes():
                 print(f"Error seeding quotes.json from {src}: {e}")
     if os.path.exists(QUOTES_FILE):
         try:
+            mtime = os.path.getmtime(QUOTES_FILE)
+            if _quotes_cache["mtime"] == mtime:
+                return _quotes_cache["data"]
             with open(QUOTES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if data and all(isinstance(q, dict) and q.get("text") for q in data):
+                _quotes_cache["mtime"] = mtime
+                _quotes_cache["data"] = data
                 return data
             print("Warning: quotes.json has an unexpected shape, using fallback quote.")
         except Exception as e:
@@ -429,6 +434,11 @@ def load_quotes():
             "category": "Perspective"
         }
     ]
+
+# Keys owned by the render/scheduler paths, never by the settings UIs. The
+# UIs only echo them back, so their saves re-read these from disk (see
+# save_settings(preserve_volatile=True)) instead of clobbering fresh values.
+VOLATILE_KEYS = ("last_rendered_date", "daily_seed", "last_update_check")
 
 def load_settings():
     settings = dict(DEFAULT_SETTINGS)
@@ -442,10 +452,20 @@ def load_settings():
             print(f"Error loading settings.json, using defaults: {e}")
     return settings
 
-def save_settings(settings):
+def save_settings(settings, preserve_volatile=False):
     """Atomically persist settings (write to a temp file, then replace), so a
-    crash or a full disk can never truncate/corrupt settings.json."""
+    crash or a full disk can never truncate/corrupt settings.json.
+
+    With ``preserve_volatile`` the disk copies of :data:`VOLATILE_KEYS` win
+    over the caller's, in one locked read-modify-write — a settings dict held
+    since startup can't silently revert a stamp or seed written meanwhile.
+    """
     with _settings_lock:
+        if preserve_volatile:
+            disk = load_settings()
+            for key in VOLATILE_KEYS:
+                if key in disk:
+                    settings[key] = disk[key]
         tmp_path = SETTINGS_FILE + ".tmp"
         try:
             with open(tmp_path, "w", encoding="utf-8") as f:
@@ -468,7 +488,7 @@ def stamp_rendered_date():
     with _settings_lock:
         settings = load_settings()
         settings["last_rendered_date"] = datetime.date.today().strftime("%Y-%m-%d")
-        return save_settings(settings)
+        save_settings(settings)
 
 def _migrate_legacy_file(filename, target_path):
     """Copies a previously-existing data file from the old app folder into data_dir."""

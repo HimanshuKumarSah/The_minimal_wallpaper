@@ -9,9 +9,11 @@ import customtkinter as ctk
 from PIL import Image, ImageTk
 
 import config
+import displays
 import paths
 import platform_info
 import startup_manager
+import update_checker
 import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
@@ -46,12 +48,24 @@ CONTROL_TRACK = "#353943"         # Inactive Switch / Slider Base Track
 CONTROL_ACTIVE = "#E4E6EB"        # Active Switch Track
 CONTROL_KNOB = "#1C1E23"          # Active Switch Knob
 
+# Shared option maps: the segmented/dropdown builders and their change
+# handlers both need them, so they live at module scope (single definition).
+LAYOUT_MAP = {
+    "Reference (10 Col)": "ref_10",
+    "Balanced (20 Col)": "balanced_20",
+    "Wide Matrix (25 Col)": "matrix_25",
+    "Calendar (53 Col)": "calendar_53",
+}
+QUOTE_MODE_MAP = {
+    "Curated Catalog": "preset",
+    "Custom Quote": "custom",
+    "Daily Random": "daily_random",
+}
+
 
 class YearProgressUI:
-    def __init__(self, root, on_wallpaper_updated=None, on_exit_app=None, start_minimized=False):
+    def __init__(self, root, start_minimized=False):
         self.root = root
-        self.on_wallpaper_updated = on_wallpaper_updated
-        self.on_exit_app = on_exit_app
         self.start_minimized = start_minimized
         
         self.settings = config.load_settings()
@@ -438,17 +452,11 @@ class YearProgressUI:
         )
         lbl_grid.pack(anchor="w", pady=(0, 4))
         
-        layout_map = {
-            "Reference (10 Col)": "ref_10",
-            "Balanced (20 Col)": "balanced_20",
-            "Wide Matrix (25 Col)": "matrix_25",
-            "Calendar (53 Col)": "calendar_53"
-        }
-        self.layout_map_rev = {v: k for k, v in layout_map.items()}
+        self.layout_map_rev = {v: k for k, v in LAYOUT_MAP.items()}
         current_layout = self.layout_map_rev.get(self.settings.get("layout", "ref_10"), "Reference (10 Col)")
         
         self.seg_layout = ctk.CTkSegmentedButton(
-            parent, values=list(layout_map.keys()),
+            parent, values=list(LAYOUT_MAP.keys()),
             command=self._on_layout_changed,
             selected_color=COLOR_HOVER, selected_hover_color=COLOR_BORDER_FOCUS,
             unselected_color=COLOR_INPUT, unselected_hover_color=COLOR_HOVER,
@@ -569,18 +577,11 @@ class YearProgressUI:
         self.sw_today.pack(anchor="w", padx=14, pady=(6, 10))
 
     def _on_font_changed(self, choice):
-        if hasattr(self, "font_map"):
-            self.settings["font_face"] = self.font_map.get(choice, "outfit")
-            self.schedule_preview_update()
+        self.settings["font_face"] = self.font_map.get(choice, "outfit")
+        self.schedule_preview_update()
 
     def _on_layout_changed(self, choice):
-        layout_map = {
-            "Reference (10 Col)": "ref_10",
-            "Balanced (20 Col)": "balanced_20",
-            "Wide Matrix (25 Col)": "matrix_25",
-            "Calendar (53 Col)": "calendar_53"
-        }
-        self.settings["layout"] = layout_map.get(choice, "ref_10")
+        self.settings["layout"] = LAYOUT_MAP.get(choice, "ref_10")
         self.schedule_preview_update()
 
     def _on_zoom_slider(self, val):
@@ -739,8 +740,8 @@ class YearProgressUI:
             if key in self.color_swatches:
                 try:
                     self.color_swatches[key].configure(fg_color=cleaned)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Could not recolor swatch for {key}: {e}")
             self.schedule_preview_update()
 
     # --------------------------------------------------------------------------
@@ -770,7 +771,7 @@ class YearProgressUI:
         lbl_mode.pack(anchor="w", pady=(0, 4))
         
         modes = ["Curated Catalog", "Custom Quote", "Daily Random"]
-        mode_val_map = {"Curated Catalog": "preset", "Custom Quote": "custom", "Daily Random": "daily_random"}
+        mode_val_map = QUOTE_MODE_MAP
         self.mode_val_map_rev = {v: k for k, v in mode_val_map.items()}
         curr_mode = self.mode_val_map_rev.get(self.settings.get("quote_mode", "preset"), "Curated Catalog")
         
@@ -890,7 +891,7 @@ class YearProgressUI:
         self.schedule_preview_update()
 
     def _on_quote_mode_change(self, choice):
-        mode_val_map = {"Curated Catalog": "preset", "Custom Quote": "custom", "Daily Random": "daily_random"}
+        mode_val_map = QUOTE_MODE_MAP
         self.settings["quote_mode"] = mode_val_map.get(choice, "preset")
         self._refresh_quote_mode_visibility()
         self.schedule_preview_update()
@@ -1024,6 +1025,71 @@ class YearProgressUI:
             )
             lbl_lock_hint.pack(anchor="w", padx=14, pady=(0, 10))
         
+        # 2c. Multi-monitor rendering + release updates (Tk parity with the
+        # web control panel's System tab)
+        lbl_multi = ctk.CTkLabel(
+            parent, text="MULTI-MONITOR & UPDATES",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color=TEXT_MUTED
+        )
+        lbl_multi.pack(anchor="w", pady=(0, 4))
+
+        multi_card = ctk.CTkFrame(
+            parent, fg_color=COLOR_INPUT, corner_radius=6,
+            border_width=1, border_color=COLOR_BORDER
+        )
+        multi_card.pack(fill="x", pady=(0, 14))
+
+        n_displays = len(displays.list_displays())
+        self.sw_multi = ctk.CTkSwitch(
+            multi_card,
+            text=f"Render one wallpaper per display ({n_displays} detected)",
+            command=self._on_multi_monitor_toggle,
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color=TEXT_PRIMARY,
+            progress_color=CONTROL_ACTIVE,
+            button_color=CONTROL_KNOB,
+            fg_color=CONTROL_TRACK,
+            button_hover_color=CONTROL_KNOB
+        )
+        if self.settings.get("multi_monitor", True):
+            self.sw_multi.select()
+        self.sw_multi.pack(anchor="w", padx=14, pady=(10, 4))
+
+        self.sw_checkup = ctk.CTkSwitch(
+            multi_card, text="Check GitHub once a day for new versions",
+            command=self._on_check_updates_toggle,
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color=TEXT_PRIMARY,
+            progress_color=CONTROL_ACTIVE,
+            button_color=CONTROL_KNOB,
+            fg_color=CONTROL_TRACK,
+            button_hover_color=CONTROL_KNOB
+        )
+        if self.settings.get("check_updates", True):
+            self.sw_checkup.select()
+        self.sw_checkup.pack(anchor="w", padx=14, pady=(4, 4))
+
+        update_row = ctk.CTkFrame(multi_card, fg_color="transparent")
+        update_row.pack(fill="x", padx=14, pady=(0, 10))
+
+        btn_check_updates = ctk.CTkButton(
+            update_row, text="Check now", width=110,
+            command=self._check_updates_now,
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=COLOR_PANEL, hover_color=COLOR_HOVER,
+            text_color=TEXT_SECONDARY, border_width=1,
+            border_color=COLOR_BORDER
+        )
+        btn_check_updates.pack(side="left")
+
+        self.lbl_update_status = ctk.CTkLabel(
+            update_row, text="",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color=TEXT_SECONDARY, wraplength=380, justify="left"
+        )
+        self.lbl_update_status.pack(side="left", padx=(12, 0))
+
         # 3. Hardware Display Info
         w, h = wallpaper_generator.get_screen_resolution()
         lbl_hw = ctk.CTkLabel(
@@ -1048,11 +1114,35 @@ class YearProgressUI:
     def _on_auto_update_toggle(self):
         self.settings["auto_update_midnight"] = bool(self.sw_midnight.get())
 
+    def _on_multi_monitor_toggle(self):
+        self.settings["multi_monitor"] = bool(self.sw_multi.get())
+
+    def _on_check_updates_toggle(self):
+        self.settings["check_updates"] = bool(self.sw_checkup.get())
+
+    def _check_updates_now(self):
+        self.lbl_update_status.configure(text="Checking GitHub releases…")
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
+
+    def _check_updates_worker(self):
+        try:
+            info = update_checker.check_now()
+        except Exception as e:
+            info = {"error": str(e)}
+        if "error" in info:
+            text = f"Could not reach GitHub ({info['error']})"
+        elif info.get("newer"):
+            text = f"New release {info['tag']} available (you have {info['current']})"
+        else:
+            text = f"You're up to date ({info['tag']})"
+        self.root.after(
+            0, lambda t=text: self.lbl_update_status.configure(text=t)
+        )
+
     def _on_startup_switch(self):
         enable = bool(self.sw_startup.get())
         success, msg = startup_manager.set_startup(enable)
         if success:
-            self.settings["start_with_windows"] = enable
             self.var_status.set(f"●  {msg}")
         else:
             messagebox.showerror("Startup Error", msg)
@@ -1144,14 +1234,9 @@ class YearProgressUI:
             self.lbl_preview.configure(text=f"Preview error: {e}")
 
     def save_settings(self):
-        # Volatile keys owned by the render/scheduler paths (stamp + midnight
-        # seed). The UI only echoes them back, so re-read them first — otherwise
-        # a stale copy loaded at startup would silently revert them on disk.
-        disk = config.load_settings()
-        for key in ("last_rendered_date", "daily_seed", "last_update_check"):
-            if key in disk:
-                self.settings[key] = disk[key]
-        if config.save_settings(self.settings):
+        # config re-reads the volatile keys (stamp, seed, update-check date)
+        # from disk under its lock, so this startup-era copy can't revert them.
+        if config.save_settings(self.settings, preserve_volatile=True):
             self.var_status.set("●  Settings saved successfully")
         else:
             self.var_status.set("●  Failed to save settings")
@@ -1171,8 +1256,6 @@ class YearProgressUI:
                 config.stamp_rendered_date()
                 self.root.after(0, lambda: self.var_status.set(f"●  Wallpaper applied at {now_time}"))
                 self.root.after(0, self.schedule_preview_update, True)
-                if self.on_wallpaper_updated:
-                    self.root.after(0, lambda: self.on_wallpaper_updated(png_path))
             else:
                 self.root.after(0, lambda: self.var_status.set(f"●  {msg}"))
                 self.root.after(0, lambda m=msg: messagebox.showerror("Wallpaper Error", m))

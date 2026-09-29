@@ -14,7 +14,7 @@ A minimalist, high-definition desktop wallpaper generator and daily tracker for 
 | Per-monitor wallpaper | ✅ `IDesktopWallpaper` (one render per display) | ✅ per-screen `NSWorkspace` | — (desktops apply one image across all outputs) |
 | Login/startup integration | ✅ HKCU Run key | ✅ Launch Agent | ✅ XDG autostart entry |
 | System tray | ✅ | ✅ | ✅ (AppIndicator/GTK backend required) |
-| Control panel UI | ✅ pywebview (WebView2) + Tk fallback | ✅ pywebview (WKWebView) | ✅ pywebview (WebKitGTK) + Tk fallback |
+| Control panel UI | ✅ pywebview (WebView2) + Tk fallback | ✅ pywebview (WKWebView) + Tk fallback | ✅ pywebview (WebKitGTK) + Tk fallback |
 | Lock screen control | ✅ | — (Windows-only, hidden in UI) | — (Windows-only, hidden in UI) |
 | Data directory | `%LOCALAPPDATA%\YearProgressWallpaper` | `~/Library/Application Support/YearProgressWallpaper` | `$XDG_DATA_HOME/YearProgressWallpaper` (default `~/.local/share/...`) |
 
@@ -31,7 +31,7 @@ pip install python-xlib
 
 ## ✨ Features
 
-- **Modern Fluent Dark UI**: Built with CustomTkinter featuring clean cards, high-DPI scaling, and live real-time desktop preview.
+- **Modern Fluent Dark UI**: pywebview-based Studio Control Center (WebView2/WKWebView/WebKitGTK) with clean cards, high-DPI scaling, and live real-time desktop preview; CustomTkinter fallback when pywebview is unavailable.
 - **Dot Grid Calendar**: Displays all 365 (or 366 in leap years) days of the current year.
   - **Passed Days**: Rendered as larger, customizable dots (`⚪`).
   - **Today**: Highlighted with an accent focus ring (`🔘`) marking your exact place in time.
@@ -40,6 +40,10 @@ pip install python-xlib
   - Interactive zoom slider from **50% to 200%**.
   - Zoom in for bold, prominent dots, or zoom out for ultra-fine minimalist spacing.
   - One-click `Reset Default (100%)` button.
+- **⏱ Countdown & Days-Left Banner**:
+  - The wallpaper shows the days remaining in the year and an optional countdown to a named target (New Year, a trip, a deadline).
+  - Manage countdown targets and toggle the banner from the web control panel; the wallpaper picks the change up on the next render.
+  - *Note:* the Tk fallback panel doesn't expose the countdown editor — use the web control panel (the default) to manage targets.
 - **🎨 Full Color Customization**:
   - **1-Click Theme Presets**: 18 curated palettes, including *Monochrome Noir* (default), *Pure Black OLED* (pitch black `#000000`), *Cyber Midnight*, *Emerald Zen*, *Golden Hour*, *Solar Crimson*, *Royal Amethyst*, *Nordic Frost*, *Matcha*, *Terracotta*, *Ocean Abyss*, *Sepia*, *Tokyo Rain*, *Rose Quartz*, *Titanium*, *Nord*, *Solarized Dark*, and *Cyberpunk*.
   - **Custom Color Pickers**: Full control over background, passed dots, today's dot/ring, coming dots, and typography colors with HEX entries and visual color dialogs.
@@ -66,9 +70,9 @@ pip install python-xlib
   - 2× supersampling with Lanczos downsampling ensures crisp typography and smooth circles.
 - **🖥 Multi-Monitor Support**:
   - Renders one correctly-sized image per connected display (Windows/macOS) and applies them individually through `IDesktopWallpaper` / per-screen `NSWorkspace`.
-  - Falls back to a single image on every display automatically when the per-monitor API is unavailable; toggleable in the System tab (`multi_monitor`).
+  - Falls back to a single image on every display automatically when the per-monitor API is unavailable; toggleable in the System tab of either control panel (`multi_monitor`).
 - **🔔 Update Checker**:
-  - Checks GitHub Releases once a day at launch and notifies through the system tray when a newer version exists (opt-out via `check_updates`; manual *Check now* button in the System tab).
+  - Checks GitHub Releases once a day at launch and notifies through the system tray when a newer version exists (opt-out via `check_updates`; manual *Check now* button with live status in the System tab of either control panel).
 - **System Tray Quick Access**:
   - Right-click or click tray icon to update wallpaper immediately, skip to the next quote, open the dashboard, or toggle startup.
 
@@ -137,7 +141,7 @@ ruff check .
 
 - **Data Directory:** see the table in [Platform Support](#-platform-support) (Windows: `%LOCALAPPDATA%\YearProgressWallpaper`, macOS: `~/Library/Application Support/YearProgressWallpaper`, Linux: `$XDG_DATA_HOME/YearProgressWallpaper`).
   - All user data and generated wallpapers are stored here so they persist reliably across reboots (including when running the packaged executable).
-  - `settings.json`: All user preferences (zoom level, custom colors, layout style, quote choice, auto-update toggle, multi-monitor toggle, update-check toggle, last rendered date).
+  - `settings.json`: All user preferences (zoom level, custom colors, layout style, quote choice, countdown banner and its targets, auto-update toggle, multi-monitor toggle, update-check toggle; plus internal stamps the UIs never edit directly: `last_rendered_date`, `daily_seed`, `last_update_check`).
   - `quotes.json`: Editable database of motivational quotes (auto-seeded from the bundled catalog on first run; edit this copy to customize).
   - `wallpaper_YYYY-MM-DD.bmp` / `.png`: Today's generated desktop wallpaper (the `.png` is what gets applied on every OS; older days are cleaned up automatically). Multi-monitor runs add `wallpaper_YYYY-MM-DD_dN.*` siblings sized for each secondary display.
   - `preview_thumbnail.png`: The live preview image shown in the control panel.

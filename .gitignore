@@ -17,3 +17,6 @@ dist/
 # Virtual environments
 .venv/
 venv/
+
+# Pytest
+.pytest_cache/

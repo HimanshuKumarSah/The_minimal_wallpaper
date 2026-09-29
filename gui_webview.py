@@ -1,7 +1,6 @@
 import base64
 import datetime
 import os
-import random
 import threading
 import time
 import webbrowser
@@ -17,8 +16,8 @@ import update_checker
 import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
+from app_base import BaseApp
 from app_tray import AppTray
-from scheduler import DailyScheduler
 
 WEB_DIR = os.path.join(paths.resource_dir(), "web")
 INDEX_HTML = os.path.join(WEB_DIR, "index.html")
@@ -53,7 +52,6 @@ class WebviewBridge:
             "settings": settings,
             "quotes": quotes,
             "themes": config.COLOR_THEMES,
-            "fonts": config.FONT_PRESETS,
             "stats": {
                 "day_of_year": day_of_year,
                 "total_days": total_days,
@@ -97,13 +95,10 @@ class WebviewBridge:
 
     def save_settings(self, settings):
         try:
-            # Volatile keys owned by the render/scheduler paths — the web UI
-            # only echoes them back, so never let a stale copy overwrite disk.
-            disk = config.load_settings()
-            for key in ("last_rendered_date", "daily_seed", "last_update_check"):
-                if key in disk:
-                    settings[key] = disk[key]
-            ok = config.save_settings(settings)
+            # preserve_volatile: config re-reads last_rendered_date / daily_seed
+            # / last_update_check from disk under its lock, so a stale copy in
+            # the web UI can never overwrite a value the render path just wrote.
+            ok = config.save_settings(settings, preserve_volatile=True)
             self.app.settings = settings
             return ok
         except Exception as e:
@@ -111,13 +106,16 @@ class WebviewBridge:
             return False
 
     def apply_wallpaper(self, settings):
-        self.save_settings(settings)
+        saved = self.save_settings(settings)
         try:
             success, msg, _png = wallpaper_apply.apply_wallpaper(settings)
             now_str = datetime.datetime.now().strftime("%I:%M:%S %p")
             if success:
                 config.stamp_rendered_date()
-                return {"success": True, "msg": f"✓ Wallpaper applied at {now_str}"}
+                out = f"✓ Wallpaper applied at {now_str}"
+                if not saved:
+                    out += " (warning: settings could not be saved)"
+                return {"success": True, "msg": out}
             else:
                 return {"success": False, "msg": f"⚠ {msg}"}
         except Exception as e:
@@ -144,9 +142,6 @@ class WebviewBridge:
         success, msg = startup_manager.set_startup(enabled)
         return {"success": success, "msg": msg}
 
-    def is_startup_enabled(self):
-        return startup_manager.is_startup_enabled()
-
     def set_lockscreen(self):
         img = wallpaper_generator.current_wallpaper_path()
         if not img:
@@ -161,26 +156,14 @@ class WebviewBridge:
     def minimize_to_tray(self):
         self.app.minimize_to_tray()
 
-    def get_time_until_midnight(self):
-        h, m, s = DailyScheduler.get_time_until_midnight()
-        return {"h": h, "m": m, "s": s}
 
-
-class YearProgressWebviewApp:
+class YearProgressWebviewApp(BaseApp):
     def __init__(self, start_minimized=False):
         self.settings = config.load_settings()
         self.quotes_list = config.load_quotes()
         self.start_minimized = start_minimized
         self.window = None
         self.bridge = WebviewBridge(self)
-
-        # Background Scheduler for Midnight updates
-        self.scheduler = DailyScheduler(self.on_midnight_trigger)
-        self.scheduler.start()
-
-        # Auto-apply wallpaper on launch if today's render is missing/stale
-        if wallpaper_generator.requires_daily_update(self.settings):
-            self.update_wallpaper_now(notify=False)
 
         # System Tray Integration
         self.tray = AppTray(
@@ -191,12 +174,23 @@ class YearProgressWebviewApp:
         )
         self.tray.start()
 
-        # Daily GitHub release check (daemon thread; no-op when disabled or
-        # already checked today; failures never surface to the user)
-        threading.Thread(target=self._check_for_updates, daemon=True).start()
+        # Midnight scheduler + daily GitHub release check (daemon thread;
+        # no-op when disabled or already checked today)
+        self._start_services()
 
         # Build Webview Window
         self._build_window()
+
+        # Auto-apply wallpaper on launch if today's render is missing/stale.
+        # Deferred to a daemon thread until AFTER window + tray setup: the
+        # first render takes seconds, and doing it synchronously here left the
+        # app invisible (no window, no tray icon) until it finished.
+        if wallpaper_generator.requires_daily_update(self.settings):
+            threading.Thread(
+                target=self.update_wallpaper_now,
+                kwargs={"notify": False},
+                daemon=True,
+            ).start()
 
     def _build_window(self):
         # Create pywebview window with Microsoft Edge WebView2
@@ -237,60 +231,13 @@ class YearProgressWebviewApp:
             except Exception as e:
                 print(f"Could not refresh webview UI: {e}")
 
-    def update_wallpaper_now(self, notify=True):
-        self.settings = config.load_settings()
-        try:
-            success, msg, _png = wallpaper_apply.apply_wallpaper(self.settings)
-            if success:
-                config.stamp_rendered_date()
-                print(f"[{datetime.datetime.now()}] Wallpaper updated successfully.")
-                self._refresh_ui()
-                if notify and self.tray:
-                    today_str = datetime.date.today().strftime("%B %d, %Y")
-                    self.tray.notify("Year Progress", f"Wallpaper updated for {today_str}!")
-            else:
-                print(f"[{datetime.datetime.now()}] Failed to set wallpaper: {msg}")
-        except Exception as e:
-            print(f"Error during wallpaper update: {e}")
-
-    def _check_for_updates(self):
-        try:
-            info = update_checker.check()
-            if info and self.tray:
-                self.tray.notify(
-                    "Year Progress",
-                    f"Version {info['tag']} is available (you have {config.APP_VERSION}). "
-                    "See GitHub Releases to download it.",
-                )
-        except Exception as e:
-            print(f"Update check error: {e}")
-
-    def on_midnight_trigger(self, reason="midnight_daily_update"):
-        print(f"[App] Midnight update triggered: {reason}")
-        self.settings = config.load_settings()
-        if not self.settings.get("auto_update_midnight", True):
-            print("[App] Midnight update skipped (auto_update_midnight is disabled).")
-            return
-        if self.settings.get("quote_mode") == "daily_random":
-            self.settings["daily_seed"] = random.randint(0, 1000)
-            config.save_settings(self.settings)
-        self.update_wallpaper_now(notify=True)
-
-    def next_quote_from_tray(self):
-        self.settings = config.load_settings()
-        mode = self.settings.get("quote_mode", "preset")
-        if mode == "preset":
-            if self.quotes_list:
-                curr_idx = self.settings.get("preset_index", 0)
-                next_idx = (curr_idx + 1) % len(self.quotes_list)
-            else:
-                next_idx = 0
-            self.settings["preset_index"] = next_idx
-        else:
-            self.settings["daily_seed"] = random.randint(0, 10000)
-        config.save_settings(self.settings)
-        self.update_wallpaper_now(notify=True)
+    def _on_render_done(self):
         self._refresh_ui()
+
+    def _sync_preset_selection(self, next_idx):
+        # No-op: _on_render_done → refreshFromTray reloads settings from disk
+        # (preset_index included) into the web UI after every render.
+        pass
 
     def quit_app(self):
         print("[App] Quitting application...")
@@ -300,7 +247,13 @@ class YearProgressWebviewApp:
             self.tray.stop()
             self.tray = None
         if self.window:
-            self.window.destroy()
+            try:
+                self.window.destroy()
+            except Exception as e:
+                # destroy() raises when the webview never reached start()
+                # (quit raced launch, or start failed) — that must not abort
+                # the shutdown, or the safety net below never runs.
+                print(f"Could not destroy window: {e}")
             self.window = None
         # Safety net: if the webview loop doesn't wind down on its own
         # (e.g. destroy() ran on a background thread), force a clean process

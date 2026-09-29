@@ -218,14 +218,48 @@ def hex_to_rgb(hex_str, default=(255, 255, 255)):
         pass
     return default
 
+# (face, size, bold) -> (font, source_path, source_mtime). Every render
+# requests the same eight fonts; re-parsing the TTF each time was pure I/O.
+_font_cache = {}
+
+
 def load_custom_font(font_face, size, bold=False):
     """
     Loads aesthetic modern fonts (Outfit, Montserrat, Inter, Cinzel, Bahnschrift)
     with graceful fallbacks.
+
+    Cached by (face, size, bold) and validated against the source file's mtime,
+    so an edited/replaced font file is picked up without a restart.
     """
     size_int = max(8, int(size))
     face = str(font_face).lower().strip()
-    
+    key = (face, size_int, bold)
+
+    cached = _font_cache.get(key)
+    if cached is not None:
+        font, cpath, cmtime = cached
+        if cpath is None:
+            return font
+        try:
+            if os.path.getmtime(cpath) == cmtime:
+                return font
+        except OSError:
+            pass
+
+    font, chosen = _load_custom_font_uncached(face, size_int, bold)
+    if chosen:
+        try:
+            mtime = os.path.getmtime(chosen)
+        except OSError:
+            chosen, mtime = None, None
+        _font_cache[key] = (font, chosen, mtime)
+    else:
+        _font_cache[key] = (font, None, None)
+    return font
+
+
+def _load_custom_font_uncached(face, size_int, bold):
+    """Font resolution proper; returns ``(font, source_path_or_None)``."""
     paths_to_try = []
     
     if face == "outfit":
@@ -268,7 +302,7 @@ def load_custom_font(font_face, size, bold=False):
     for p in paths_to_try:
         if os.path.exists(p):
             try:
-                return ImageFont.truetype(p, size_int)
+                return ImageFont.truetype(p, size_int), p
             except Exception:
                 continue
                 
@@ -276,11 +310,11 @@ def load_custom_font(font_face, size, bold=False):
     for fb in _system_font_fallbacks(bold):
         if os.path.exists(fb):
             try:
-                return ImageFont.truetype(fb, size_int)
+                return ImageFont.truetype(fb, size_int), fb
             except Exception:
                 pass
                 
-    return ImageFont.load_default()
+    return ImageFont.load_default(), None
 
 
 def _system_font_fallbacks(bold):
@@ -435,7 +469,7 @@ def get_active_countdown(settings, today=None):
 
 
 def generate_wallpaper(settings, target_date=None, width=None, height=None, output_path=None,
-                       preview_path=None, preview_only=False):
+                       preview_path=None, preview_only=False, cleanup=True):
     """Thread-safe wrapper that serializes concurrent render requests."""
     with RENDER_LOCK:
         return _generate_wallpaper_impl(
@@ -446,10 +480,11 @@ def generate_wallpaper(settings, target_date=None, width=None, height=None, outp
             output_path=output_path,
             preview_path=preview_path,
             preview_only=preview_only,
+            cleanup=cleanup,
         )
 
 
-def _generate_wallpaper_impl(settings, target_date=None, width=None, height=None, output_path=None, preview_path=None, preview_only=False):
+def _generate_wallpaper_impl(settings, target_date=None, width=None, height=None, output_path=None, preview_path=None, preview_only=False, cleanup=True):
     """
     Renders the wallpaper image with premium typography, customizable colors, and zoom scaling.
     If preview_only=True, renders quickly at preview scale without disk thrashing.
@@ -746,8 +781,11 @@ def _generate_wallpaper_impl(settings, target_date=None, width=None, height=None
     png_path = os.path.splitext(output_path)[0] + ".png"
     res.save(png_path, "PNG")
     
-    # Delete previous days' wallpaper files (keep only today's)
-    _cleanup_old_wallpapers(png_path)
+    # Delete previous days' wallpaper files (keep only today's). Callers that
+    # render several displays in a row pass cleanup=False on every render but
+    # the last — the glob/delete scan would otherwise repeat per display.
+    if cleanup:
+        _cleanup_old_wallpapers(png_path)
     
     # Save scaled preview for GUI
     if preview_path is None:

@@ -72,18 +72,17 @@ def _stamp_check():
         print(f"Could not stamp update check: {e}")
 
 
-def check(force=False):
+def check():
     """Background check: returns the release dict when it's newer, else None.
 
-    Skipped when the setting is off, or when today's check already happened
-    (``force`` bypasses both, used by the manual UI button — which reports its
-    own result and doesn't rely on the return value here).
+    Skipped when the setting is off or when today's check already happened.
+    (The manual UI button uses check_now(), which always fetches.)
     """
     settings = config.load_settings()
-    if not force and not settings.get("check_updates", True):
+    if not settings.get("check_updates", True):
         return None
     today = datetime.date.today().strftime("%Y-%m-%d")
-    if not force and settings.get("last_update_check") == today:
+    if settings.get("last_update_check") == today:
         return None
     # Stamp before fetching so a network failure doesn't retry all day.
     _stamp_check()
@@ -92,6 +91,23 @@ def check(force=False):
         _latest["info"] = info
         return info
     return None
+
+
+def check_and_notify(tray):
+    """Launch-time background check: tray-notifies when a newer release exists.
+
+    Shared by every app backend; network failures stay silent by design.
+    """
+    try:
+        info = check()
+        if info and tray:
+            tray.notify(
+                "Year Progress",
+                f"Version {info['tag']} is available (you have {config.APP_VERSION}). "
+                "See GitHub Releases to download it.",
+            )
+    except Exception as e:
+        print(f"Update check error: {e}")
 
 
 def check_now():

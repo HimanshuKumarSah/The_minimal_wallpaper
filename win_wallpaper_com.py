@@ -150,7 +150,10 @@ def enumerate_monitors():
             finally:
                 _ole32.CoTaskMemFree(ctypes.cast(path_buf, ctypes.c_void_p))
         return monitors or None
-    except Exception:
+    except Exception as e:
+        # Swallowing here would make wallpaper_setter's fallback look silent —
+        # log why the per-monitor path bailed before returning None.
+        print(f"[COM] Monitor enumeration failed: {e}")
         return None
     finally:
         if owns_init:
@@ -178,7 +181,8 @@ def set_wallpapers(assignments):
             if set_fn(ptr, key, path) == _S_OK:
                 applied += 1
         return applied
-    except Exception:
+    except Exception as e:
+        print(f"[COM] Per-monitor SetWallpaper failed: {e}")
         return None
     finally:
         if owns_init:
@@ -195,7 +199,8 @@ def set_all(path):
     try:
         set_fn = _vtable_fn(ptr, _VT_SET_WALLPAPER, ctypes.c_long, ctypes.c_wchar_p, ctypes.c_wchar_p)
         return set_fn(ptr, None, path) == _S_OK
-    except Exception:
+    except Exception as e:
+        print(f"[COM] set_all (every monitor) failed: {e}")
         return False
     finally:
         if owns_init:

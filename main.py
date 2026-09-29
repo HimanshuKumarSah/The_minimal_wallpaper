@@ -1,16 +1,12 @@
 import argparse
-import datetime
-import random
 import sys
-import threading
 
 import config
-import update_checker
 import wallpaper_apply
 import wallpaper_generator
 import wallpaper_setter
+from app_base import BaseApp
 from app_tray import AppTray
-from scheduler import DailyScheduler
 
 try:
     from gui_webview import YearProgressWebviewApp
@@ -32,7 +28,7 @@ except Exception as e:
     HAS_TK_UI = False
 
 
-class YearProgressApp:
+class YearProgressApp(BaseApp):
     def __init__(self, start_minimized=False):
         self.settings = config.load_settings()
         self.quotes_list = config.load_quotes()
@@ -43,9 +39,7 @@ class YearProgressApp:
         if self.start_minimized:
             self.root.withdraw()
         self.ui = YearProgressUI(
-            self.root, 
-            on_wallpaper_updated=self.on_wallpaper_applied,
-            on_exit_app=self.quit_app,
+            self.root,
             start_minimized=self.start_minimized
         )
             
@@ -57,90 +51,33 @@ class YearProgressApp:
             on_exit=self.quit_app
         )
         self.tray.start()
-        
-        # Setup Scheduler for midnight daily updates
-        self.scheduler = DailyScheduler(self.on_midnight_trigger)
-        self.scheduler.start()
 
-        # Daily GitHub release check (daemon thread; no-op when disabled or
-        # already checked today; failures never surface to the user)
-        threading.Thread(target=self._check_for_updates, daemon=True).start()
+        # Midnight scheduler + daily GitHub release check (daemon thread;
+        # no-op when disabled or already checked today)
+        self._start_services()
         
         # Auto-apply wallpaper on initial launch to ensure it's up to date
         # (deferred so the UI appears immediately; runs after mainloop starts)
         if wallpaper_generator.requires_daily_update(self.settings):
             self.root.after(300, lambda: self.update_wallpaper_now(notify=False))
 
-    def _check_for_updates(self):
-        try:
-            info = update_checker.check()
-            if info and self.tray:
-                self.tray.notify(
-                    "Year Progress",
-                    f"Version {info['tag']} is available (you have {config.APP_VERSION}). "
-                    "See GitHub Releases to download it.",
-                )
-        except Exception as e:
-            print(f"Update check error: {e}")
+    def _on_render_done(self):
+        # Tk widgets must only be touched from the main thread; the tray and
+        # scheduler callbacks run on background threads, so marshal via after.
+        self.root.after(0, self.ui.schedule_preview_update, True)
+
+    def _sync_preset_selection(self, next_idx):
+        # Keep the UI's own settings dict in sync, otherwise its next save
+        # would write the old preset_index back over ours, and move the
+        # quotes dropdown to match (marshalled to the Tk main thread).
+        self.ui.settings["preset_index"] = next_idx
+        if hasattr(self.ui, "opt_quotes") and next_idx < len(self.ui.quote_titles):
+            self.root.after(
+                0, lambda i=next_idx: self.ui.opt_quotes.set(self.ui.quote_titles[i])
+            )
 
     def show_window_from_tray(self):
         self.root.after(0, self.ui.show_window)
-
-    def update_wallpaper_now(self, notify=True):
-        self.settings = config.load_settings()
-        try:
-            success, msg, _png = wallpaper_apply.apply_wallpaper(self.settings)
-            if success:
-                print(f"[{datetime.datetime.now()}] Wallpaper updated successfully.")
-                config.stamp_rendered_date()
-                if notify and self.tray:
-                    today_str = datetime.date.today().strftime("%B %d, %Y")
-                    self.tray.notify("Year Progress", f"Wallpaper updated for {today_str}!")
-                # Update UI preview if open
-                self.root.after(0, self.ui.schedule_preview_update, True)
-            else:
-                print(f"[{datetime.datetime.now()}] Failed to set wallpaper: {msg}")
-        except Exception as e:
-            print(f"Error during wallpaper update: {e}")
-
-    def on_midnight_trigger(self, reason="midnight_daily_update"):
-        print(f"[App] Midnight update triggered: {reason}")
-        self.settings = config.load_settings()
-        if not self.settings.get("auto_update_midnight", True):
-            print("[App] Midnight update skipped (auto_update_midnight is disabled).")
-            return
-        # If daily random quote is enabled, pick a fresh seed
-        if self.settings.get("quote_mode") == "daily_random":
-            self.settings["daily_seed"] = random.randint(0, 1000)
-            config.save_settings(self.settings)
-            
-        self.update_wallpaper_now(notify=True)
-
-    def next_quote_from_tray(self):
-        self.settings = config.load_settings()
-        mode = self.settings.get("quote_mode", "preset")
-        if mode == "preset":
-            if self.quotes_list:
-                curr_idx = self.settings.get("preset_index", 0)
-                next_idx = (curr_idx + 1) % len(self.quotes_list)
-            else:
-                next_idx = 0
-            self.settings["preset_index"] = next_idx
-            # Tk widgets must only be touched from the main thread; the tray
-            # callback runs on a background thread, so marshal via root.after.
-            # Keep the UI's own settings dict in sync too, otherwise its next
-            # save would write the old preset_index back over ours.
-            self.ui.settings["preset_index"] = next_idx
-            if hasattr(self.ui, "opt_quotes") and next_idx < len(self.ui.quote_titles):
-                self.root.after(0, lambda i=next_idx: self.ui.opt_quotes.set(self.ui.quote_titles[i]))
-        else:
-            self.settings["daily_seed"] = random.randint(0, 10000)
-            
-        config.save_settings(self.settings)
-        self.update_wallpaper_now(notify=True)
-
-    def on_wallpaper_applied(self, path):
-        pass
 
     def quit_app(self):
         print("[App] Quitting application...")

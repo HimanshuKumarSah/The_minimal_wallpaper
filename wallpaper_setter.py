@@ -55,6 +55,9 @@ def set_wallpapers(assignments, primary_path):
         )
         if applied:
             return True, f"Wallpaper updated on {applied} display(s)."
+        # No exception, but nothing was applied — the fall-through below must
+        # stay visible in the log or multi-monitor degradation looks silent.
+        print("Note: per-monitor wallpaper API applied nothing; using single image.")
     except Exception as e:
         print(f"Note: per-monitor wallpaper API failed ({e}); using single image.")
     # COM unavailable or every SetWallpaper call failed → one image everywhere.
@@ -110,8 +113,12 @@ def _set_wallpaper_windows(image_path):
             import win_wallpaper_com
 
             monitors = win_wallpaper_com.enumerate_monitors()
-            if monitors and len(monitors) > 1 and win_wallpaper_com.set_all(abs_path):
-                return True, "Wallpaper updated successfully."
+            if monitors and len(monitors) > 1:
+                if win_wallpaper_com.set_all(abs_path):
+                    return True, "Wallpaper updated successfully."
+                # >1 display but set_all failed: log it, then SPI below applies
+                # one image everywhere (per-display images may go stale).
+                print("Note: per-monitor wallpaper API failed; using SPI fallback.")
         except Exception as e:
             print(f"Note: per-monitor wallpaper API unavailable ({e}); using SPI.")
 
@@ -146,8 +153,10 @@ def write_lockscreen_result(ok, msg):
     try:
         with open(LOCK_RESULT_FILE, "w", encoding="utf-8") as f:
             json.dump({"ok": bool(ok), "msg": str(msg)}, f)
-    except Exception:
-        pass
+    except Exception as e:
+        # The parent reads this file to learn the outcome — a silent failure
+        # here leaves it waiting on a result that never arrives.
+        print(f"Could not write lock-screen result file: {e}")
 
 
 def set_lockscreen_elevated(jpg_path):

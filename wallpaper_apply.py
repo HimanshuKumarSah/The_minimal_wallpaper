@@ -54,6 +54,8 @@ def apply_wallpaper(settings):
             width=display.width,
             height=display.height,
             output_path=output_path,
+            # Stale-file scan once per apply, not once per display.
+            cleanup=(i == len(ordered) - 1),
         )
         png = os.path.splitext(wall_path)[0] + ".png"
         assignments.append((display.key, png))

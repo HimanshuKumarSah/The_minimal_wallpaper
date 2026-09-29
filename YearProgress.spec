@@ -3,9 +3,18 @@
 #   Windows : dist/YearProgress.exe   (onefile windowed app)
 #   macOS   : dist/YearProgress.app   (bundle created below)
 #   Linux   : dist/YearProgress       (onefile ELF binary)
+import re
 import sys
 
 from PyInstaller.utils.hooks import collect_all
+
+# Single source of truth for the release version: parse APP_VERSION straight
+# out of config.py (text-level) so the spec never imports app modules — their
+# import side effects (directory creation etc.) don't belong in a build step.
+with open(f"{SPECPATH}/config.py", encoding="utf-8") as _cfg_file:
+    APP_VERSION = re.search(
+        r'APP_VERSION\s*=\s*"([^"]+)"', _cfg_file.read()
+    ).group(1)
 
 datas = [('web', 'web'), ('assets', 'assets'), ('quotes.json', '.'), ('app_icon.png', '.'), ('app_icon.ico', '.')]
 binaries = []
@@ -63,10 +72,10 @@ if sys.platform == 'darwin':
         name='YearProgress.app',
         icon=None,
         bundle_identifier='com.yearprogress.wallpaper',
-        version='1.1.0',
+        version=APP_VERSION,
         info_plist={
             'NSHighResolutionCapable': True,
-            'CFBundleShortVersionString': '1.1.0',
+            'CFBundleShortVersionString': APP_VERSION,
             'NSHumanReadableCopyright': 'Year Progress Wallpaper',
         },
     )

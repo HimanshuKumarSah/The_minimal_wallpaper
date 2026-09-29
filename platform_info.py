@@ -9,7 +9,6 @@ import sys
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
-IS_LINUX = not (IS_WINDOWS or IS_MACOS)
 
 OS_NAME = "windows" if IS_WINDOWS else ("macos" if IS_MACOS else "linux")
 

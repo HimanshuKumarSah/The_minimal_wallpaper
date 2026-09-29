@@ -54,8 +54,3 @@ class DailyScheduler:
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
         return hours, minutes, seconds
-
-    @staticmethod
-    def get_time_until_midnight_str():
-        h, m, s = DailyScheduler.get_time_until_midnight()
-        return f"{h}h {m}m {s}s"
