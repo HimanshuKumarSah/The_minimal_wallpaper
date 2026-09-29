@@ -2,7 +2,7 @@
 
 A minimalist, high-definition desktop wallpaper generator and daily tracker for **Windows, macOS and Linux**. Inspired by the Stoic *Memento Mori* concept and modern minimalist dashboards.
 
-![Year Progress Reference](ref.jpeg)
+![Year Progress desktop wallpaper](Example.png)
 
 ---
 
