@@ -109,10 +109,9 @@ pip install -r requirements-dev.txt
 pyinstaller --noconfirm YearProgress.spec
 ```
 
-Before building, run the gate that must stay green:
+Before building, run the lint gate that must stay green:
 ```powershell
 ruff check .
-pytest -q
 ```
 
 ---

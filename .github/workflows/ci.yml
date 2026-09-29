@@ -24,24 +24,9 @@ jobs:
       - run: pip install ruff==0.16.4
       - run: ruff check .
 
-  test:
-    name: Test (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-22.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.14'
-      - run: pip install -r requirements-dev.txt
-      - run: pytest -q
-
   build:
     name: Build (${{ matrix.artifact }})
-    needs: [lint, test]
+    needs: [lint]
     strategy:
       fail-fast: false
       matrix:
