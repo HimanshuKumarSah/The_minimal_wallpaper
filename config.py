@@ -376,6 +376,11 @@ DEFAULT_SETTINGS = {
     "color_coming": "#2D2E38",
     "color_text_primary": "#FFFFFF",
     "color_text_secondary": "#9CA3AF",
+    # Custom background image (composited behind the dot grid)
+    "bg_mode": "solid",               # "solid" | "image"
+    "bg_image": "",                    # absolute path of the stored copy
+    "bg_opacity": 60,                  # 0-100: image visibility over color_bg
+    "bg_saturation": 80,               # 0-100: 0 = grayscale, 100 = original
     # Automation
     "auto_update_midnight": True,
     # Multi-monitor: render one correctly-sized image per display (Windows/macOS;

@@ -744,6 +744,37 @@
     }
     .hex:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
+    /* Background image */
+    .seg-2 { grid-template-columns: repeat(2, 1fr); }
+    .bg-preview {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 10px;
+    }
+    .bg-thumb {
+      width: 96px; height: 54px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: var(--control);
+      border: 1px solid var(--border-2);
+      flex-shrink: 0;
+    }
+    .bg-thumb.is-empty {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-3);
+    }
+    img.bg-thumb.is-empty { display: none; }
+    .bg-info { min-width: 0; flex: 1; }
+    .bg-name {
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bg-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    .bg-btns { display: flex; gap: 7px; flex-shrink: 0; }
+
     /* Countdown line */
     .countdown {
       display: flex; align-items: center; gap: 8px;
@@ -1028,6 +1059,53 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <label class="section-label">Background image</label>
+            <div class="well section">
+              <div class="seg seg-2">
+                <button onclick="setBgMode('solid')" id="bgmode-solid" class="qmode-btn is-active">Solid color</button>
+                <button onclick="setBgMode('image')" id="bgmode-image" class="qmode-btn">Custom image</button>
+              </div>
+              <div id="bg-controls" class="section" style="gap:12px;">
+                <div class="bg-preview">
+                  <img id="bg-thumb" class="bg-thumb is-empty" alt="Background preview">
+                  <div id="bg-thumb-empty" class="bg-thumb is-empty"><span>No image</span></div>
+                  <div class="bg-info">
+                    <div class="bg-name" id="bg-name">No image chosen</div>
+                    <div class="bg-sub">JPG, PNG, BMP or WebP — stored locally with your settings</div>
+                  </div>
+                  <div class="bg-btns">
+                    <button onclick="pickBackground()" class="btn ghost sm">Choose…</button>
+                    <button onclick="clearBackground()" id="bg-remove" class="btn link">Remove</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="row-between">
+                    <span class="row-title">Image opacity</span>
+                    <span id="bg-opacity-val" class="value-chip">60%</span>
+                  </div>
+                  <div class="slider-row" style="margin-top: 10px;">
+                    <span class="bound">0%</span>
+                    <input type="range" id="slider-bg-opacity" min="0" max="100" step="1" value="60" oninput="onBgOpacityInput(this.value)">
+                    <span class="bound">100%</span>
+                  </div>
+                </div>
+                <div>
+                  <div class="row-between">
+                    <span class="row-title">Image saturation</span>
+                    <span id="bg-sat-val" class="value-chip">80%</span>
+                  </div>
+                  <div class="slider-row" style="margin-top: 10px;">
+                    <span class="bound">B&amp;W</span>
+                    <input type="range" id="slider-bg-sat" min="0" max="100" step="1" value="80" oninput="onBgSaturationInput(this.value)">
+                    <span class="bound">Full</span>
+                  </div>
+                </div>
+              </div>
+              <div class="note" style="border-top:none;margin-top:0;padding-top:0;">The theme's background color shows through as the image fades — lower opacity keeps text readable.</div>
             </div>
           </div>
 
@@ -1351,6 +1429,7 @@
       renderThemesGrid();
       updateActiveThemeUI(activeThemeKey);
       updateColorInputs();
+      updateBackgroundUI();
 
       // Quotes Tab
       const swQuote = document.getElementById('sw-quote');
@@ -1650,6 +1729,127 @@
       updateColorInputs();
       schedulePreviewUpdate();
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // BACKGROUND IMAGE
+  // -------------------------------------------------------------------------
+  function clampBg(v, fallback) {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  function setRangeFill(id, val, min, max) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const pct = Math.max(0, Math.min(100, ((parseFloat(val) - min) / (max - min)) * 100));
+    el.style.setProperty('--fill', `${pct}%`);
+  }
+
+  function bgFileName(path) {
+    if (!path) return '';
+    const parts = String(path).split(/[/\\]/);
+    return parts[parts.length - 1] || String(path);
+  }
+
+  function updateBackgroundUI(thumbnailUrl) {
+    const s = appState.settings || {};
+    const mode = s.bg_mode === 'image' ? 'image' : 'solid';
+    const solidBtn = document.getElementById('bgmode-solid');
+    const imageBtn = document.getElementById('bgmode-image');
+    if (solidBtn) solidBtn.classList.toggle('is-active', mode === 'solid');
+    if (imageBtn) imageBtn.classList.toggle('is-active', mode === 'image');
+
+    const controls = document.getElementById('bg-controls');
+    if (controls) controls.style.opacity = mode === 'image' ? '1' : '0.45';
+
+    const opacity = clampBg(s.bg_opacity, 60);
+    const sat = clampBg(s.bg_saturation, 80);
+    const slOp = document.getElementById('slider-bg-opacity');
+    if (slOp) { slOp.value = opacity; setRangeFill('slider-bg-opacity', opacity, 0, 100); }
+    const opVal = document.getElementById('bg-opacity-val');
+    if (opVal) opVal.innerText = `${opacity}%`;
+    const slSat = document.getElementById('slider-bg-sat');
+    if (slSat) { slSat.value = sat; setRangeFill('slider-bg-sat', sat, 0, 100); }
+    const satVal = document.getElementById('bg-sat-val');
+    if (satVal) satVal.innerText = `${sat}%`;
+
+    const nameEl = document.getElementById('bg-name');
+    if (nameEl) nameEl.innerText = s.bg_image ? bgFileName(s.bg_image) : 'No image chosen';
+    const thumb = document.getElementById('bg-thumb');
+    const empty = document.getElementById('bg-thumb-empty');
+    const url = thumbnailUrl || null;
+    if (thumb) {
+      if (url) {
+        thumb.src = url;
+        thumb.classList.remove('is-empty');
+        thumb.style.display = '';
+      } else {
+        thumb.removeAttribute('src');
+        thumb.classList.add('is-empty');
+        thumb.style.display = 'none';
+      }
+    }
+    if (empty) empty.style.display = url ? 'none' : 'flex';
+    const rm = document.getElementById('bg-remove');
+    if (rm) rm.style.visibility = s.bg_image ? 'visible' : 'hidden';
+  }
+
+  function setBgMode(mode) {
+    appState.settings.bg_mode = mode === 'image' ? 'image' : 'solid';
+    if (mode === 'image' && !appState.settings.bg_image) {
+      pickBackground();
+      updateBackgroundUI();
+      return;
+    }
+    updateBackgroundUI();
+    schedulePreviewUpdate();
+  }
+
+  function onBgOpacityInput(val) {
+    const n = clampBg(val, 60);
+    document.getElementById('bg-opacity-val').innerText = `${n}%`;
+    setRangeFill('slider-bg-opacity', n, 0, 100);
+    appState.settings.bg_opacity = n;
+    schedulePreviewUpdate();
+  }
+
+  function onBgSaturationInput(val) {
+    const n = clampBg(val, 80);
+    document.getElementById('bg-sat-val').innerText = `${n}%`;
+    setRangeFill('slider-bg-sat', n, 0, 100);
+    appState.settings.bg_saturation = n;
+    schedulePreviewUpdate();
+  }
+
+  async function pickBackground() {
+    if (!window.pywebview) {
+      setStatus('Image picker needs the desktop app — open Year Progress, not the HTML file directly.');
+      return;
+    }
+    setStatus('Choosing a background image…');
+    try {
+      const res = await window.pywebview.api.pick_background_image();
+      if (!res) return;
+      if (res.cancelled) { setStatus('Background image choice cancelled.'); return; }
+      if (!res.success) { setStatus(`Could not use that image: ${res.msg || 'unknown error'}`); return; }
+      appState.settings.bg_image = res.path;
+      appState.settings.bg_mode = 'image';
+      updateBackgroundUI(res.thumbnail);
+      setStatus(`Background image "${bgFileName(res.path)}" added.`);
+      schedulePreviewUpdate();
+    } catch (e) {
+      setStatus(`Could not open the image picker: ${e}`);
+    }
+  }
+
+  function clearBackground() {
+    appState.settings.bg_image = '';
+    appState.settings.bg_mode = 'solid';
+    updateBackgroundUI();
+    setStatus('Background image removed — back to solid color.');
+    schedulePreviewUpdate();
   }
 
   // -------------------------------------------------------------------------
@@ -2028,7 +2228,7 @@
   // Standalone mock for quick HTML preview if opened outside pywebview
   function mockInit() {
     appState = {
-      settings: { font_face: 'outfit', layout: 'ref_10', grid_zoom: 1.0, show_progress_ring: true, show_days_left: true, highlight_current_day: true, quote_mode: 'preset', preset_index: 0, color_theme: 'noir', show_countdown: true, countdown_index: 0, countdown_targets: [{ label: 'New Year', date: '2027-01-01', yearly: true }, { label: 'Trip to Japan', date: '2026-10-05', yearly: false }] },
+      settings: { font_face: 'outfit', layout: 'ref_10', grid_zoom: 1.0, show_progress_ring: true, show_days_left: true, highlight_current_day: true, quote_mode: 'preset', preset_index: 0, color_theme: 'noir', show_countdown: true, countdown_index: 0, countdown_targets: [{ label: 'New Year', date: '2027-01-01', yearly: true }, { label: 'Trip to Japan', date: '2026-10-05', yearly: false }], bg_mode: 'solid', bg_image: '', bg_opacity: 60, bg_saturation: 80 },
       stats: { day_of_year: 265, total_days: 365, days_left: 100, pct: 72.6, year: 2026 },
       display: { width: 2560, height: 1440 },
       themes: {

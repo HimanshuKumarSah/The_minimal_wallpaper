@@ -9,10 +9,18 @@ import subprocess
 import sys
 import threading
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
 import config
 import paths
+
+BACKGROUND_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+# (abspath, mtime, width, height) -> cover-resized RGB base image (before
+# saturation/opacity are applied). Bounded manually — one entry per distinct
+# render size, so previews and multi-monitor renders never re-decode/resize
+# the same source file twice in a row.
+_bg_resized_cache = {}
 
 FONTS_DIR = os.path.join(paths.resource_dir(), "assets", "fonts")
 
@@ -217,6 +225,139 @@ def hex_to_rgb(hex_str, default=(255, 255, 255)):
     except Exception:
         pass
     return default
+
+
+def backgrounds_dir():
+    """Writable folder holding the stored copies of user background images."""
+    d = os.path.join(paths.data_dir(), "backgrounds")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except OSError as e:
+        print(f"Warning: could not create backgrounds dir {d}: {e}")
+    return d
+
+
+def store_background_image(src_path):
+    """Copies a user-chosen image into backgrounds_dir.
+
+    Copying (instead of referencing the original) keeps renders working when
+    the source is moved, renamed, or lives on a removable drive. Returns the
+    absolute destination path; raises on failure or unsupported type.
+    """
+    if not src_path or not os.path.isfile(src_path):
+        raise FileNotFoundError(f"Background image not found: {src_path}")
+    ext = os.path.splitext(src_path)[1].lower()
+    if ext not in BACKGROUND_EXTS:
+        raise ValueError(
+            f"Unsupported image type '{ext or '?'}' "
+            f"(supported: {sorted(BACKGROUND_EXTS)})"
+        )
+    try:
+        with Image.open(src_path) as im:
+            im.verify()
+    except Exception as e:
+        raise ValueError(f"Not a readable image file: {e}") from e
+    dest_dir = backgrounds_dir()
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", os.path.basename(src_path)).strip("._") or "background"
+    stem, ext = os.path.splitext(base)
+    candidate = os.path.join(dest_dir, base)
+    n = 1
+    while os.path.exists(candidate):
+        try:
+            if os.path.samefile(candidate, src_path):
+                return os.path.abspath(candidate)
+        except OSError:
+            pass
+        candidate = os.path.join(dest_dir, f"{stem}_{n}{ext}")
+        n += 1
+    shutil.copyfile(src_path, candidate)
+    return os.path.abspath(candidate)
+
+
+def resolve_background_path(settings):
+    """Absolute path of the configured background image, or None.
+
+    None when bg_mode is not "image", nothing is configured, or the stored
+    file went missing (deleted by hand) — callers fall back to solid color.
+    """
+    if (settings or {}).get("bg_mode", "solid") != "image":
+        return None
+    raw = (settings or {}).get("bg_image", "")
+    if not raw:
+        return None
+    p = os.path.abspath(os.path.expanduser(str(raw)))
+    data_root = os.path.abspath(paths.data_dir())
+    try:
+        # Only files inside data_dir are trusted; anything else (a stale
+        # pointer at the pre-copy original) is ignored for safety.
+        if os.path.commonpath([p, data_root]) != data_root:
+            return None
+    except (OSError, ValueError):
+        return None
+    return p if os.path.isfile(p) else None
+
+
+def _cover_resize(img, sw, sh):
+    """Scales img to cover (sw, sh), then center-crops — no stretching."""
+    iw, ih = img.size
+    if iw <= 0 or ih <= 0:
+        raise ValueError("Background image has no pixels")
+    factor = max(sw / iw, sh / ih)
+    resized = img.resize((max(1, int(iw * factor)), max(1, int(ih * factor))), Image.Resampling.LANCZOS)
+    left = (resized.width - sw) // 2
+    top = (resized.height - sh) // 2
+    return resized.crop((left, top, left + sw, top + sh))
+
+
+def _cached_cover_base(bg_path, sw, sh):
+    """Cover-resized RGB base for bg_path at (sw, sh), cached by mtime."""
+    try:
+        mtime = os.path.getmtime(bg_path)
+    except OSError:
+        raise FileNotFoundError(f"Background image missing: {bg_path}")
+    key = (os.path.abspath(bg_path), mtime, sw, sh)
+    hit = _bg_resized_cache.get(key)
+    if hit is not None:
+        return hit
+    with Image.open(bg_path) as im:
+        base = _cover_resize(im.convert("RGB"), sw, sh)
+    if len(_bg_resized_cache) >= 4:
+        _bg_resized_cache.clear()
+    _bg_resized_cache[key] = base
+    return base
+
+
+def _compose_background(img, settings, sw, sh):
+    """Blends the configured image over the solid canvas in place.
+
+    Opacity 0-100 mixes the (saturation-adjusted) photo with color_bg;
+    saturation 0-100 runs from grayscale to the original colors. Any failure
+    leaves the solid canvas untouched so a bad file can never blank output.
+    """
+    try:
+        bg_path = resolve_background_path(settings)
+        if not bg_path:
+            return
+        try:
+            opacity = float(settings.get("bg_opacity", 60))
+        except (TypeError, ValueError):
+            opacity = 60.0
+        try:
+            saturation = float(settings.get("bg_saturation", 80))
+        except (TypeError, ValueError):
+            saturation = 80.0
+        opacity = max(0.0, min(100.0, opacity)) / 100.0
+        saturation = max(0.0, min(100.0, saturation)) / 100.0
+        if opacity <= 0.0:
+            return
+        base = _cached_cover_base(bg_path, sw, sh)
+        photo = ImageEnhance.Color(base).enhance(saturation) if saturation < 1.0 else base
+        if opacity >= 1.0:
+            img.paste(photo, (0, 0))
+        else:
+            img.paste(Image.blend(img.copy(), photo, opacity), (0, 0))
+    except Exception as e:
+        print(f"Background image skipped ({e}); using solid color.")
 
 # (face, size, bold) -> (font, source_path, source_mtime). Every render
 # requests the same eight fonts; re-parsing the TTF each time was pure I/O.
@@ -522,6 +663,7 @@ def _generate_wallpaper_impl(settings, target_date=None, width=None, height=None
     )
     
     img = Image.new("RGB", (sw, sh), c_bg)
+    _compose_background(img, settings, sw, sh)
     draw = ImageDraw.Draw(img)
     
     # Layout selection

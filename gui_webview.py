@@ -156,6 +156,90 @@ class WebviewBridge:
     def minimize_to_tray(self):
         self.app.minimize_to_tray()
 
+    def pick_background_image(self):
+        """Opens an image file dialog and stores a copy in backgrounds_dir.
+
+        Returns {"success", "path", "name", "thumbnail"} — the frontend writes
+        path into settings.bg_image (bg_mode="image") via its normal save path.
+        """
+        src = self._ask_background_file()
+        if not src:
+            return {"success": False, "cancelled": True, "msg": "No file chosen."}
+        try:
+            dest = wallpaper_generator.store_background_image(src)
+        except (FileNotFoundError, ValueError, OSError) as e:
+            return {"success": False, "msg": str(e)}
+        return {
+            "success": True,
+            "path": dest,
+            "name": os.path.basename(dest),
+            "thumbnail": self._background_thumbnail(dest),
+        }
+
+    def _ask_background_file(self):
+        # Tk's native dialog first (blocking, always on screen); pywebview's
+        # file dialog as the fallback for Tk-less installs.
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = getattr(tk, "_default_root", None)
+            created = False
+            if root is None:
+                root = tk.Tk()
+                root.withdraw()
+                created = True
+            try:
+                return filedialog.askopenfilename(
+                    parent=root,
+                    title="Choose a background image",
+                    filetypes=[
+                        ("Images", "*.jpg *.jpeg *.png *.bmp *.webp"),
+                        ("All files", "*.*"),
+                    ],
+                ) or None
+            finally:
+                if created:
+                    try:
+                        root.destroy()
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Tk file dialog unavailable ({e}); trying webview dialog.")
+        try:
+            window = getattr(self.app, "window", None)
+            if window is not None:
+                picked = window.create_file_dialog(
+                    webview.OPEN_DIALOG,
+                    allow_multiple=False,
+                    file_types=("Image Files (*.jpg;*.jpeg;*.png;*.bmp;*.webp)",),
+                )
+                if picked:
+                    return picked[0] if isinstance(picked, (list, tuple)) else picked
+        except Exception as e:
+            print(f"Webview file dialog failed: {e}")
+        return None
+
+    def _background_thumbnail(self, dest_path, max_edge=480):
+        try:
+            with open(dest_path, "rb") as f:
+                raw = f.read()
+            # Downscale for the thumbnail so a 4K photo never ships megabytes
+            # of base64 into the webview on every pick.
+            import io as _io
+
+            from PIL import Image as _Image
+            with _Image.open(_io.BytesIO(raw)) as im:
+                im = im.convert("RGB")
+                im.thumbnail((max_edge, max_edge), _Image.Resampling.LANCZOS)
+                buf = _io.BytesIO()
+                im.save(buf, "JPEG", quality=82)
+                encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+                return f"data:image/jpeg;base64,{encoded}"
+        except Exception as e:
+            print(f"Error building background thumbnail: {e}")
+            return self.get_preview_data_url(dest_path)
+        return None
+
 
 class YearProgressWebviewApp(BaseApp):
     def __init__(self, start_minimized=False):

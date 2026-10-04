@@ -3,7 +3,7 @@ import os
 import random
 import threading
 import tkinter as tk
-from tkinter import colorchooser, messagebox
+from tkinter import colorchooser, filedialog, messagebox
 
 import customtkinter as ctk
 from PIL import Image, ImageTk
@@ -706,6 +706,115 @@ class YearProgressUI:
             swatch.pack_propagate(False)
             self.color_swatches[key] = swatch
 
+        # 3. Custom Background Image (composited behind the dot grid)
+        lbl_bg = ctk.CTkLabel(
+            parent, text="CUSTOM BACKGROUND IMAGE",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color=TEXT_MUTED
+        )
+        lbl_bg.pack(anchor="w", pady=(0, 4))
+
+        bg_card = ctk.CTkFrame(
+            parent, fg_color=COLOR_INPUT, corner_radius=6,
+            border_width=1, border_color=COLOR_BORDER
+        )
+        bg_card.pack(fill="x", pady=(0, 10))
+
+        self.bg_mode_map = {"Solid Color": "solid", "Custom Image": "image"}
+        self.bg_mode_map_rev = {v: k for k, v in self.bg_mode_map.items()}
+        curr_bg = self.bg_mode_map_rev.get(self.settings.get("bg_mode", "solid"), "Solid Color")
+
+        self.seg_bg = ctk.CTkSegmentedButton(
+            bg_card, values=list(self.bg_mode_map.keys()),
+            command=self._on_bg_mode_change,
+            selected_color=COLOR_HOVER, selected_hover_color=COLOR_BORDER_FOCUS,
+            unselected_color=COLOR_PANEL, unselected_hover_color=COLOR_HOVER,
+            text_color=TEXT_PRIMARY, corner_radius=6, height=30,
+            font=ctk.CTkFont(family="Segoe UI", size=10)
+        )
+        self.seg_bg.set(curr_bg)
+        self.seg_bg.pack(fill="x", padx=12, pady=(10, 6))
+
+        self.lbl_bg_file = ctk.CTkLabel(
+            bg_card, text="",
+            font=ctk.CTkFont(family="Segoe UI", size=10), text_color=TEXT_SECONDARY,
+            wraplength=420, justify="left"
+        )
+        self.lbl_bg_file.pack(anchor="w", padx=12, pady=(0, 2))
+
+        bg_btns = ctk.CTkFrame(bg_card, fg_color="transparent")
+        bg_btns.pack(fill="x", padx=12, pady=(0, 6))
+
+        btn_bg_pick = ctk.CTkButton(
+            bg_btns, text="Choose Image...",
+            font=ctk.CTkFont(family="Segoe UI", size=10),
+            fg_color=COLOR_PANEL, hover_color=COLOR_HOVER,
+            border_width=1, border_color=COLOR_BORDER,
+            corner_radius=4, height=26, width=110,
+            command=self._choose_bg_image
+        )
+        btn_bg_pick.pack(side="left")
+
+        btn_bg_clear = ctk.CTkButton(
+            bg_btns, text="Remove",
+            font=ctk.CTkFont(family="Segoe UI", size=10),
+            fg_color="transparent", hover_color=COLOR_HOVER,
+            border_width=1, border_color=COLOR_BORDER,
+            corner_radius=4, height=26, width=80,
+            command=self._clear_bg_image
+        )
+        btn_bg_clear.pack(side="left", padx=(6, 0))
+
+        curr_op = self._clamp_bg(self.settings.get("bg_opacity", 60), 60)
+        op_row = ctk.CTkFrame(bg_card, fg_color="transparent")
+        op_row.pack(fill="x", padx=12, pady=(4, 2))
+        ctk.CTkLabel(
+            op_row, text="Image opacity",
+            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_PRIMARY
+        ).pack(side="left")
+        self.lbl_bg_op_val = ctk.CTkLabel(
+            op_row, text=f"{curr_op}%",
+            font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
+            text_color=TEXT_PRIMARY
+        )
+        self.lbl_bg_op_val.pack(side="right")
+
+        self.slider_bg_opacity = ctk.CTkSlider(
+            bg_card, from_=0, to=100, number_of_steps=100,
+            command=self._on_bg_opacity_slider,
+            fg_color=COLOR_BORDER, progress_color=COLOR_BORDER_FOCUS,
+            button_color=TEXT_PRIMARY, button_hover_color="#FFFFFF",
+            height=16
+        )
+        self.slider_bg_opacity.set(curr_op)
+        self.slider_bg_opacity.pack(fill="x", padx=12, pady=(0, 4))
+
+        curr_sat = self._clamp_bg(self.settings.get("bg_saturation", 80), 80)
+        sat_row = ctk.CTkFrame(bg_card, fg_color="transparent")
+        sat_row.pack(fill="x", padx=12, pady=(2, 2))
+        ctk.CTkLabel(
+            sat_row, text="Image saturation (0 = B&W)",
+            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=TEXT_PRIMARY
+        ).pack(side="left")
+        self.lbl_bg_sat_val = ctk.CTkLabel(
+            sat_row, text=f"{curr_sat}%",
+            font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
+            text_color=TEXT_PRIMARY
+        )
+        self.lbl_bg_sat_val.pack(side="right")
+
+        self.slider_bg_saturation = ctk.CTkSlider(
+            bg_card, from_=0, to=100, number_of_steps=100,
+            command=self._on_bg_saturation_slider,
+            fg_color=COLOR_BORDER, progress_color=COLOR_BORDER_FOCUS,
+            button_color=TEXT_PRIMARY, button_hover_color="#FFFFFF",
+            height=16
+        )
+        self.slider_bg_saturation.set(curr_sat)
+        self.slider_bg_saturation.pack(fill="x", padx=12, pady=(0, 10))
+
+        self._refresh_bg_ui()
+
     def apply_theme_preset(self, theme_key):
         if theme_key in config.COLOR_THEMES:
             self.settings["color_theme"] = theme_key
@@ -743,6 +852,78 @@ class YearProgressUI:
                 except Exception as e:
                     print(f"Could not recolor swatch for {key}: {e}")
             self.schedule_preview_update()
+
+    @staticmethod
+    def _clamp_bg(val, fallback):
+        try:
+            n = int(round(float(val)))
+        except (TypeError, ValueError):
+            return fallback
+        return max(0, min(100, n))
+
+    def _refresh_bg_ui(self):
+        mode = self.settings.get("bg_mode", "solid")
+        if mode not in ("solid", "image"):
+            mode = "solid"
+        path = self.settings.get("bg_image", "") or ""
+        if hasattr(self, "lbl_bg_file"):
+            if path and os.path.isfile(path):
+                self.lbl_bg_file.configure(text=f"Image: {os.path.basename(path)}")
+            elif mode == "image":
+                self.lbl_bg_file.configure(text="No image chosen — pick one below.")
+            else:
+                self.lbl_bg_file.configure(text="Solid theme color (no image).")
+
+    def _on_bg_mode_change(self, choice):
+        self.settings["bg_mode"] = self.bg_mode_map.get(choice, "solid")
+        if self.settings["bg_mode"] == "image" and not self.settings.get("bg_image"):
+            self._choose_bg_image()
+            return
+        self._refresh_bg_ui()
+        self.schedule_preview_update()
+
+    def _choose_bg_image(self):
+        src = filedialog.askopenfilename(
+            title="Choose a background image",
+            filetypes=[
+                ("Images", "*.jpg *.jpeg *.png *.bmp *.webp"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not src:
+            self._refresh_bg_ui()
+            return
+        try:
+            dest = wallpaper_generator.store_background_image(src)
+        except (FileNotFoundError, ValueError, OSError) as e:
+            messagebox.showerror("Background Image", str(e))
+            return
+        self.settings["bg_image"] = dest
+        self.settings["bg_mode"] = "image"
+        if hasattr(self, "seg_bg"):
+            self.seg_bg.set("Custom Image")
+        self._refresh_bg_ui()
+        self.schedule_preview_update()
+
+    def _clear_bg_image(self):
+        self.settings["bg_image"] = ""
+        self.settings["bg_mode"] = "solid"
+        if hasattr(self, "seg_bg"):
+            self.seg_bg.set("Solid Color")
+        self._refresh_bg_ui()
+        self.schedule_preview_update()
+
+    def _on_bg_opacity_slider(self, val):
+        n = self._clamp_bg(val, 60)
+        self.lbl_bg_op_val.configure(text=f"{n}%")
+        self.settings["bg_opacity"] = n
+        self.schedule_preview_update()
+
+    def _on_bg_saturation_slider(self, val):
+        n = self._clamp_bg(val, 80)
+        self.lbl_bg_sat_val.configure(text=f"{n}%")
+        self.settings["bg_saturation"] = n
+        self.schedule_preview_update()
 
     # --------------------------------------------------------------------------
     # INSPECTOR TAB 3: QUOTES & WISDOM
